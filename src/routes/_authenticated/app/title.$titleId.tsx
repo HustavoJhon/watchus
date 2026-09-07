@@ -10,6 +10,7 @@ import { ReviewsSection } from '@/components/reviews'
 import { useAuth } from '@/lib/auth'
 import { useCatalog, useCatalogMutations } from '@/lib/queries'
 import type { WatchStatus } from '@/lib/catalog'
+import { formatShortDate } from '@/lib/format'
 import { backdropUrl, posterUrl } from '@/lib/tmdb/config'
 import { fetchTitleDetails, trailerEmbedUrl } from '@/lib/tmdb/details'
 import { tmdbUserMessage } from '@/lib/tmdb/errors'
@@ -182,7 +183,7 @@ function TitleDetailPage() {
 
           {myWatchedAt ? (
             <p className="text-xs text-muted-foreground">
-              La viste el {myWatchedAt}
+              La viste el {formatShortDate(myWatchedAt)}
               {byBoth ? '. ¡Tu pareja también!' : ''}
             </p>
           ) : null}
@@ -221,6 +222,10 @@ function TitleDetailPage() {
                 size="sm"
                 variant={item.ownFavorite ? 'default' : 'outline'}
                 disabled={busy}
+                aria-pressed={item.ownFavorite}
+                aria-label={
+                  item.ownFavorite ? 'Quitar de favoritos' : 'Marcar favorito'
+                }
                 onClick={() =>
                   mutations.favorite.mutate({
                     titleId: localTitleId,
@@ -231,7 +236,7 @@ function TitleDetailPage() {
                 <HeartIcon
                   className={item.ownFavorite ? 'fill-current' : undefined}
                 />
-                {item.ownFavorite ? 'Favorito' : 'Favorito'}
+                Favorito
               </Button>
             </div>
             {mutations.setStatus.isError ? (
