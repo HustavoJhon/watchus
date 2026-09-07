@@ -7,31 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       households: {
@@ -54,51 +29,6 @@ export type Database = {
           name?: string
         }
         Relationships: []
-      }
-      invitations: {
-        Row: {
-          created_at: string
-          expires_at: string
-          household_id: string
-          id: string
-          token: string
-          used_at: string | null
-          used_by: string | null
-        }
-        Insert: {
-          created_at?: string
-          expires_at?: string
-          household_id: string
-          id?: string
-          token?: string
-          used_at?: string | null
-          used_by?: string | null
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string
-          household_id?: string
-          id?: string
-          token?: string
-          used_at?: string | null
-          used_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'invitations_household_id_fkey'
-            columns: ['household_id']
-            isOneToOne: false
-            referencedRelation: 'households'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'invitations_used_by_fkey'
-            columns: ['used_by']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-        ]
       }
       profiles: {
         Row: {
@@ -300,16 +230,13 @@ export type Database = {
         Args: never
         Returns: {
           created_at: string
-          expires_at: string
-          household_id: string
           id: string
-          token: string
-          used_at: string | null
-          used_by: string | null
+          join_code: string
+          name: string
         }
         SetofOptions: {
           from: '*'
-          to: 'invitations'
+          to: 'households'
           isOneToOne: true
           isSetofReturn: false
         }
@@ -440,9 +367,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       media_type: ['movie', 'tv'],
