@@ -101,6 +101,7 @@ function SearchPage() {
             onChange={(event) => setInput(event.target.value)}
             placeholder="Buscar en TMDB…"
             className="pl-8"
+            aria-label="Buscar en TMDB"
             autoFocus
           />
         </div>

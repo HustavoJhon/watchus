@@ -68,6 +68,7 @@ function AppLayout() {
             <Link
               key={tab.to}
               to={tab.to}
+              aria-current={active ? 'page' : undefined}
               className={cn(
                 'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors',
                 active

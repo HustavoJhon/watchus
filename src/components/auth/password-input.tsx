@@ -21,7 +21,7 @@ function PasswordInput({ className, ...props }: React.ComponentProps<'input'>) {
         size="icon-sm"
         className="absolute inset-y-0 right-0 my-auto mr-1"
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? 'Hide password' : 'Show password'}
+        aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
       >
         {visible ? <EyeOffIcon /> : <EyeIcon />}
       </Button>
