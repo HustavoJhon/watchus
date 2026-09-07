@@ -31,7 +31,7 @@ Aunque la app está pensada para dos personas, los nombres y la relación entre 
 
 ### D-03: TMDB se consulta desde el frontend (v3)
 
-Se usa la **API v3** de TMDB: la clave es un query param `api_key` pensado para clientes. Se expone únicamente vía `VITE_TMDB_API_KEY` (`.env.example`); nunca se escribe en la BD, en storage ni en logs. El idioma de las respuestas es `es-ES`. Ningún secreto de Supabase va al cliente: solo `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. Si `VITE_TMDB_API_KEY` está vacía, la UI muestra un `TmdbError` de tipo `missing-key` sin romper el resto de la app.
+Se usa la **API v3** de TMDB: la clave es un query param `api_key` pensado para clientes. Se expone únicamente vía `VITE_TMDB_API_KEY` (`.env.example`); nunca se escribe en la BD, en storage ni en logs. El idioma de las respuestas es `es-ES`. Ningún secreto de Supabase va al cliente: solo `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. Si `VITE_TMDB_API_KEY` está vacía, la UI muestra un `TmdbError` de tipo `missing-key` sin romper el resto de la app. Cada petición se aborta a los 8 s (`TMDB_TIMEOUT_MS`) para que una conexión colgada muestre un error comprensible en vez de un spinner infinito; los estados HTTP se mapean a mensajes en español (`unauthorized`, `not-found`, `rate-limited`, `server`).
 
 ### D-04: la colección de títulos es compartida a nivel de hogar
 
@@ -82,6 +82,10 @@ La selección es un sorteo (fácil "Elegir otra") sobre un conjunto determinista
 ### D-15 (Fase 5): reviews con PK natural y RLS sin cambios
 
 No hubo migración: la tabla `reviews` (PK `(user_id, title_id)`, `checks` de contenido no vacío) y sus políticas de Fase 1 ya cubrían el modelo aprobado (una review por usuario/título, editable, sin historial). El cliente solo usa upsert por PK y delete; la RLS impide crear/editar/eliminar reviews ajenas y aislar hogares (suite `06_phase5.sql`).
+
+### D-16 (Fase 6): errores de render y rutas inválidas con fallback en español
+
+La raíz del router define `errorComponent` (mensaje "Algo salió mal" + Reintentar, sin stack traces; el detalle técnico se loguea en consola) y `notFoundComponent` (pantalla 404 con enlace al inicio). Se eligió no mostrar texto técnico al usuario. Ver también `docs/production.md`, que documenta el checklist de despliegue y las evaluaciones diferidas de **PWA** (no aporta valor offline real con este stack: red necesaria para TMDB/Supabase y auth; se aplaza) y **tests E2E** (la suite RLS SQL + los tests unitarios cubren lo crítico; Playwright se reintroduciría solo con smoke tests si hay regresiones de flujo).
 
 ## Flujo de datos
 
