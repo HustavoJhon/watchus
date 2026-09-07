@@ -4,7 +4,14 @@ import {
   Outlet,
   useLocation,
 } from '@tanstack/react-router'
-import { SearchIcon, HomeIcon, ListVideoIcon, UsersIcon } from 'lucide-react'
+import {
+  SearchIcon,
+  HomeIcon,
+  ListVideoIcon,
+  UsersIcon,
+  BarChart3Icon,
+  LibraryIcon,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/app')({
@@ -14,9 +21,15 @@ export const Route = createFileRoute('/_authenticated/app')({
 const tabs = [
   {
     to: '/app',
-    label: 'Catálogo',
+    label: 'Dashboard',
     icon: HomeIcon,
     active: (pathname: string) => pathname === '/app',
+  },
+  {
+    to: '/app/catalog',
+    label: 'Catálogo',
+    icon: LibraryIcon,
+    active: (pathname: string) => pathname.startsWith('/app/catalog'),
   },
   {
     to: '/app/search',
@@ -29,6 +42,12 @@ const tabs = [
     label: 'Pendientes',
     icon: ListVideoIcon,
     active: (pathname: string) => pathname.startsWith('/app/watchlist'),
+  },
+  {
+    to: '/app/stats',
+    label: 'Estadísticas',
+    icon: BarChart3Icon,
+    active: (pathname: string) => pathname.startsWith('/app/stats'),
   },
   {
     to: '/app/hogar',

@@ -20,8 +20,10 @@ import { Route as PublicForgotPasswordRouteImport } from './routes/_public/forgo
 import { Route as PublicLoginRouteImport } from './routes/_public/login'
 import { Route as PublicRegisterRouteImport } from './routes/_public/register'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/app/index'
+import { Route as AuthenticatedAppCatalogRouteImport } from './routes/_authenticated/app/catalog'
 import { Route as AuthenticatedAppHogarRouteImport } from './routes/_authenticated/app/hogar'
 import { Route as AuthenticatedAppSearchRouteImport } from './routes/_authenticated/app/search'
+import { Route as AuthenticatedAppStatsRouteImport } from './routes/_authenticated/app/stats'
 import { Route as AuthenticatedAppWatchlistRouteImport } from './routes/_authenticated/app/watchlist'
 import { Route as AuthenticatedAppTitleTitleIdRouteImport } from './routes/_authenticated/app/title.$titleId'
 
@@ -79,6 +81,11 @@ const AuthenticatedAppIndexRoute = AuthenticatedAppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppCatalogRoute = AuthenticatedAppCatalogRouteImport.update({
+  id: '/catalog',
+  path: '/catalog',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
 const AuthenticatedAppHogarRoute = AuthenticatedAppHogarRouteImport.update({
   id: '/hogar',
   path: '/hogar',
@@ -87,6 +94,11 @@ const AuthenticatedAppHogarRoute = AuthenticatedAppHogarRouteImport.update({
 const AuthenticatedAppSearchRoute = AuthenticatedAppSearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
+const AuthenticatedAppStatsRoute = AuthenticatedAppStatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
 const AuthenticatedAppWatchlistRoute =
@@ -111,8 +123,10 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof PublicForgotPasswordRoute
   '/login': typeof PublicLoginRoute
   '/register': typeof PublicRegisterRoute
+  '/app/catalog': typeof AuthenticatedAppCatalogRoute
   '/app/hogar': typeof AuthenticatedAppHogarRoute
   '/app/search': typeof AuthenticatedAppSearchRoute
+  '/app/stats': typeof AuthenticatedAppStatsRoute
   '/app/watchlist': typeof AuthenticatedAppWatchlistRoute
   '/app/': typeof AuthenticatedAppIndexRoute
   '/app/title/$titleId': typeof AuthenticatedAppTitleTitleIdRoute
@@ -125,8 +139,10 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof PublicForgotPasswordRoute
   '/login': typeof PublicLoginRoute
   '/register': typeof PublicRegisterRoute
+  '/app/catalog': typeof AuthenticatedAppCatalogRoute
   '/app/hogar': typeof AuthenticatedAppHogarRoute
   '/app/search': typeof AuthenticatedAppSearchRoute
+  '/app/stats': typeof AuthenticatedAppStatsRoute
   '/app/watchlist': typeof AuthenticatedAppWatchlistRoute
   '/app': typeof AuthenticatedAppIndexRoute
   '/app/title/$titleId': typeof AuthenticatedAppTitleTitleIdRoute
@@ -143,8 +159,10 @@ export interface FileRoutesById {
   '/_public/forgot-password': typeof PublicForgotPasswordRoute
   '/_public/login': typeof PublicLoginRoute
   '/_public/register': typeof PublicRegisterRoute
+  '/_authenticated/app/catalog': typeof AuthenticatedAppCatalogRoute
   '/_authenticated/app/hogar': typeof AuthenticatedAppHogarRoute
   '/_authenticated/app/search': typeof AuthenticatedAppSearchRoute
+  '/_authenticated/app/stats': typeof AuthenticatedAppStatsRoute
   '/_authenticated/app/watchlist': typeof AuthenticatedAppWatchlistRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
   '/_authenticated/app/title/$titleId': typeof AuthenticatedAppTitleTitleIdRoute
@@ -160,8 +178,10 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/app/catalog'
     | '/app/hogar'
     | '/app/search'
+    | '/app/stats'
     | '/app/watchlist'
     | '/app/'
     | '/app/title/$titleId'
@@ -174,8 +194,10 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/app/catalog'
     | '/app/hogar'
     | '/app/search'
+    | '/app/stats'
     | '/app/watchlist'
     | '/app'
     | '/app/title/$titleId'
@@ -191,8 +213,10 @@ export interface FileRouteTypes {
     | '/_public/forgot-password'
     | '/_public/login'
     | '/_public/register'
+    | '/_authenticated/app/catalog'
     | '/_authenticated/app/hogar'
     | '/_authenticated/app/search'
+    | '/_authenticated/app/stats'
     | '/_authenticated/app/watchlist'
     | '/_authenticated/app/'
     | '/_authenticated/app/title/$titleId'
@@ -284,6 +308,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppIndexRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/catalog': {
+      id: '/_authenticated/app/catalog'
+      path: '/catalog'
+      fullPath: '/app/catalog'
+      preLoaderRoute: typeof AuthenticatedAppCatalogRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/hogar': {
       id: '/_authenticated/app/hogar'
       path: '/hogar'
@@ -296,6 +327,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/app/search'
       preLoaderRoute: typeof AuthenticatedAppSearchRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/_authenticated/app/stats': {
+      id: '/_authenticated/app/stats'
+      path: '/stats'
+      fullPath: '/app/stats'
+      preLoaderRoute: typeof AuthenticatedAppStatsRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
     '/_authenticated/app/watchlist': {
@@ -316,16 +354,20 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedAppRouteChildren {
+  AuthenticatedAppCatalogRoute: typeof AuthenticatedAppCatalogRoute
   AuthenticatedAppHogarRoute: typeof AuthenticatedAppHogarRoute
   AuthenticatedAppSearchRoute: typeof AuthenticatedAppSearchRoute
+  AuthenticatedAppStatsRoute: typeof AuthenticatedAppStatsRoute
   AuthenticatedAppWatchlistRoute: typeof AuthenticatedAppWatchlistRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
   AuthenticatedAppTitleTitleIdRoute: typeof AuthenticatedAppTitleTitleIdRoute
 }
 
 const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
+  AuthenticatedAppCatalogRoute: AuthenticatedAppCatalogRoute,
   AuthenticatedAppHogarRoute: AuthenticatedAppHogarRoute,
   AuthenticatedAppSearchRoute: AuthenticatedAppSearchRoute,
+  AuthenticatedAppStatsRoute: AuthenticatedAppStatsRoute,
   AuthenticatedAppWatchlistRoute: AuthenticatedAppWatchlistRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
   AuthenticatedAppTitleTitleIdRoute: AuthenticatedAppTitleTitleIdRoute,

@@ -27,6 +27,7 @@ function stateRow(
     watched_at: string | null
     rating: number | null
     is_favorite: boolean
+    updated_at: string | null
   }> = {},
 ) {
   return {
@@ -35,6 +36,7 @@ function stateRow(
     watched_at: overrides.watched_at ?? null,
     rating: overrides.rating ?? null,
     is_favorite: overrides.is_favorite ?? false,
+    updated_at: overrides.updated_at ?? null,
     title: t,
   }
 }
@@ -90,6 +92,9 @@ describe('watchedByBoth', () => {
       ownFavorite: false,
       partnerStatus: 'watched',
       partnerWatchedAt: '2026-01-02',
+      partnerRating: null,
+      ownUpdatedAt: null,
+      partnerUpdatedAt: null,
     }
     expect(watchedByBoth(base)).toBe(true)
     expect(watchedByBoth({ ...base, partnerStatus: 'watchlist' })).toBe(false)

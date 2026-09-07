@@ -16,6 +16,9 @@ export interface CatalogItem {
   ownFavorite: boolean
   partnerStatus: WatchStatus | null
   partnerWatchedAt: string | null
+  partnerRating: number | null
+  ownUpdatedAt: string | null
+  partnerUpdatedAt: string | null
 }
 
 interface JoinedStateRow {
@@ -24,6 +27,7 @@ interface JoinedStateRow {
   watched_at: string | null
   rating: number | null
   is_favorite: boolean
+  updated_at: string | null
   title: TitleRow
 }
 
@@ -59,6 +63,9 @@ export function buildCatalog(
       ownFavorite: own?.is_favorite ?? false,
       partnerStatus: partner?.watch_status ?? null,
       partnerWatchedAt: partner?.watched_at ?? null,
+      partnerRating: partner?.rating ?? null,
+      ownUpdatedAt: own?.updated_at ?? null,
+      partnerUpdatedAt: partner?.updated_at ?? null,
     })
   }
   return items
@@ -72,7 +79,7 @@ export function getCatalog() {
   return supabase
     .from('user_title_state')
     .select(
-      'user_id, watch_status, watched_at, rating, is_favorite, title:titles(*)',
+      'user_id, watch_status, watched_at, rating, is_favorite, updated_at, title:titles(*)',
     )
     .order('created_at', { referencedTable: 'titles', ascending: false })
 }
