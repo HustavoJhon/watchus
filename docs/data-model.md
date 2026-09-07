@@ -151,7 +151,7 @@ Helpers que se usarán en las políticas:
 | Operación | Política                                                                                                        |
 | --------- | --------------------------------------------------------------------------------------------------------------- |
 | SELECT    | `id` es mi hogar: `exists (select 1 from profiles where household_id = households.id and user_id = auth.uid())` |
-| INSERT    | Sin acceso directo (onboarding por RPC `create_household`)                                                       |
+| INSERT    | Sin acceso directo (onboarding por RPC `create_household`)                                                      |
 | UPDATE    | Solo si el hogar es el mío                                                                                      |
 | DELETE    | Sin acceso directo                                                                                              |
 
@@ -159,11 +159,11 @@ Helpers que se usarán en las políticas:
 
 El onboarding y la invitación no insertan filas directamente: pasan por RPCs `security definer` (`set search_path = ''`), que validan reglas que una política RLS no puede expresar.
 
-| Función                          | Reglas                                                     |
-| -------------------------------- | ---------------------------------------------------------- |
-| `create_household(name)`         | El llamante no pertenece a ningún hogar; crea el hogar y lo asigna. Devuelve el hogar (con `join_code`). |
-| `generate_invitation_code()`     | Rota el `join_code` del hogar del llamante. Devuelve el hogar actualizado. |
-| `accept_invitation_code(code)`   | El llamante no pertenece a ningún hogar; `join_code` (mayúsculas) debe existir. El trigger max-2 rechaza si el hogar está lleno. Devuelve el hogar. |
+| Función                        | Reglas                                                                                                                                              |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_household(name)`       | El llamante no pertenece a ningún hogar; crea el hogar y lo asigna. Devuelve el hogar (con `join_code`).                                            |
+| `generate_invitation_code()`   | Rota el `join_code` del hogar del llamante. Devuelve el hogar actualizado.                                                                          |
+| `accept_invitation_code(code)` | El llamante no pertenece a ningún hogar; `join_code` (mayúsculas) debe existir. El trigger max-2 rechaza si el hogar está lleno. Devuelve el hogar. |
 
 **Límite de 2 integrantes:** trigger `private.profile_household_limit()` antes de `insert`/`update of household_id` en `profiles`. Usa `pg_advisory_xact_lock` para que dos `accept` simultáneos no traspasen el límite, y eleva `check_violation` ("Household is full…") si ya hay 2 miembros. Ver tests en `supabase/tests/rls/04_household_phase3.sql`.
 
@@ -229,12 +229,12 @@ $$;
 
 #### `households`
 
-| Columna      | Tipo        | Notas                                                              |
-| ------------ | ----------- | ------------------------------------------------------------------- |
-| `id`         | uuid PK     | `default gen_random_uuid()`                                         |
-| `name`       | text        | nombre del hogar                                                    |
+| Columna      | Tipo          | Notas                                                                                                 |
+| ------------ | ------------- | ----------------------------------------------------------------------------------------------------- |
+| `id`         | uuid PK       | `default gen_random_uuid()`                                                                           |
+| `name`       | text          | nombre del hogar                                                                                      |
 | `join_code`  | text not null | código de invitación, 8 hex mayúsculas (ej. `A1B2C3D4`); `unique`; visible solo para miembros vía RLS |
-| `created_at` | timestamptz | `default now()`                                                     |
+| `created_at` | timestamptz   | `default now()`                                                                                       |
 
 #### `profiles`
 
