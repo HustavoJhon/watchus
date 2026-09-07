@@ -241,6 +241,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_or_create_title: {
+        Args: {
+          p_backdrop_path: string
+          p_genres: string[]
+          p_media_type: Database['public']['Enums']['media_type']
+          p_overview: string
+          p_poster_path: string
+          p_title: string
+          p_tmdb_id: number
+          p_year: number
+        }
+        Returns: {
+          backdrop_path: string | null
+          created_at: string
+          genres: string[]
+          id: string
+          media_type: Database['public']['Enums']['media_type']
+          overview: string
+          poster_path: string | null
+          title: string
+          tmdb_id: number
+          year: number | null
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'titles'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       media_type: 'movie' | 'tv'

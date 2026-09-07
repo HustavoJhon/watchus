@@ -125,16 +125,38 @@ do $$ begin
   end;
 end $$;
 
--- C3: watched_at sin watch_status=watched -> check violation
+-- C3: al salir de 'watched' el trigger limpia watched_at (regla del modelo)
+do $$ begin
+  update public.user_title_state
+    set watch_status = 'watchlist', watched_at = '2026-09-03'
+    where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+      and title_id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1';
+
+  if (select watched_at from public.user_title_state
+        where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+          and title_id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1') is not null then
+    raise exception 'C3 FAIL: watched_at no cleared';
+  end if;
+
+  raise notice 'C3 OK watched_at_cleared_on_exit';
+end $$;
+
+-- C3b: el CHECK sigue siendo backstop si se deshabilita el trigger
 do $$ begin
   begin
+    alter table public.user_title_state
+      disable trigger user_title_state_sync_watched_at;
     update public.user_title_state
       set watch_status = 'watchlist', watched_at = '2026-09-03'
       where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
         and title_id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1';
-    raise exception 'C3 FAIL: watched_at constraint no enforced';
+    alter table public.user_title_state
+      enable trigger user_title_state_sync_watched_at;
+    raise exception 'C3b FAIL: constraint no enforced';
   exception when check_violation then
-    raise notice 'C3 OK watched_at_requires_watched';
+    alter table public.user_title_state
+      enable trigger user_title_state_sync_watched_at;
+    raise notice 'C3b OK watched_at_requires_watched_backstop';
   end;
 end $$;
 
