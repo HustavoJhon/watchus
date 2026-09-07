@@ -1,155 +1,180 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
-import { ArrowRightIcon, SearchIcon } from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { ActivityIcon, ArrowRightIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { TitleCard } from '@/components/catalog'
 import { Skeleton } from '@/components/ui/skeleton'
+import { WatchTonight } from '@/components/watch-tonight'
+import { statusLabel } from '@/components/catalog'
 import { useAuth } from '@/lib/auth'
-import { useCatalog, useHouseholdContext } from '@/lib/queries'
-import type { WatchStatus } from '@/lib/catalog'
-import { cn } from '@/lib/utils'
+import { useAllReviews, useCatalog, useHouseholdContext } from '@/lib/queries'
+import type { CatalogItem } from '@/lib/catalog'
+import type { ReviewRow } from '@/lib/reviews'
+import { computeCatalogStats, type CatalogStats } from '@/lib/stats'
+import { formatRelativeTime } from '@/lib/format'
 
 export const Route = createFileRoute('/_authenticated/app/')({
-  component: CatalogPage,
+  component: DashboardPage,
 })
 
-type Filter = 'all' | WatchStatus
-
-const filters: Array<{ value: Filter; label: string }> = [
-  { value: 'all', label: 'Todos' },
-  { value: 'watchlist', label: 'Pendiente' },
-  { value: 'watching', label: 'Viendo' },
-  { value: 'watched', label: 'Visto' },
+const statCards: Array<{ key: keyof CatalogStats; label: string }> = [
+  { key: 'total', label: 'Títulos' },
+  { key: 'watchlist', label: 'Pendientes' },
+  { key: 'watching', label: 'Viendo' },
+  { key: 'watched', label: 'Vistos' },
+  { key: 'favorites', label: 'Favoritos' },
+  { key: 'watchedByBoth', label: 'Vistos por ambos' },
 ]
 
-function CatalogPage() {
-  const auth = useAuth()
-  const navigate = useNavigate()
-  const catalogQuery = useCatalog(auth.user)
-  const { household, secondMember } = useHouseholdContext(auth.user)
-  const [filter, setFilter] = useState<Filter>('all')
-  const [search, setSearch] = useState('')
+interface ActivityEvent {
+  at: string
+  text: string
+}
 
-  const items = catalogQuery.data ?? []
-  const filtered = items.filter((item) =>
-    filter === 'all' ? true : item.ownStatus === filter,
-  )
-
-  function submitSearch() {
-    const query = search.trim()
-    if (query) {
-      void navigate({ to: '/app/search', search: { q: query } })
+/**
+ * Recent household activity, derived in memory from the catalog state rows and
+ * the household reviews (both already cached by useCatalog/useAllReviews).
+ */
+function buildActivity(
+  items: CatalogItem[],
+  reviews: ReviewRow[],
+  selfId: string,
+  partnerId: string | null,
+  nameFor: (userId: string) => string | null,
+): ActivityEvent[] {
+  const events: ActivityEvent[] = []
+  for (const item of items) {
+    const title = `«${item.title.title}»`
+    const rows = [
+      { at: item.ownUpdatedAt, status: item.ownStatus, id: selfId },
+      { at: item.partnerUpdatedAt, status: item.partnerStatus, id: partnerId },
+    ]
+    for (const row of rows) {
+      if (!row.at || !row.status || !row.id) continue
+      const label = statusLabel(row.status)
+      const who = nameFor(row.id)
+      if (!label || !who) continue
+      events.push({
+        at: row.at,
+        text: `${who} marcó ${title} como ${label}`,
+      })
     }
   }
+  const titleById = new Map(
+    items.map((item) => [item.title.id, item.title.title]),
+  )
+  for (const review of reviews) {
+    const title = titleById.get(review.title_id)
+    if (!title) continue
+    const who = nameFor(review.user_id) ?? 'Alguien'
+    events.push({
+      at: review.updated_at,
+      text: `${who} escribió una reseña de «${title}»`,
+    })
+  }
+  return events.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8)
+}
+
+function DashboardPage() {
+  const auth = useAuth()
+  const catalogQuery = useCatalog(auth.user)
+  const reviewsQuery = useAllReviews(auth.user)
+  const { household, profile, secondMember, members } = useHouseholdContext(
+    auth.user,
+  )
+
+  const items = catalogQuery.data ?? []
+  const stats = computeCatalogStats(items)
+
+  const me = members.find((member) => member.id === auth.user?.id)
+  const partner = members.find((member) => member.id !== auth.user?.id)
+
+  const nameFor = (userId: string) =>
+    members.find((member) => member.id === userId)?.display_name ?? null
+
+  const activity = buildActivity(
+    items,
+    reviewsQuery.data ?? [],
+    auth.user?.id ?? '',
+    partner?.id ?? null,
+    nameFor,
+  )
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          submitSearch()
-        }}
-        className="flex gap-2"
-      >
-        <div className="relative flex-1">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar películas o series en TMDB…"
-            className="pl-8"
-          />
-        </div>
-        <Button type="submit" disabled={!search.trim()}>
-          Buscar
-        </Button>
-      </form>
-
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1">
-          {filters.map((option) => (
-            <Button
-              key={option.value}
-              type="button"
-              variant={filter === option.value ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {filtered.length} título{filtered.length === 1 ? '' : 's'}
-        </span>
-      </div>
-
-      {!household ? null : !secondMember ? (
-        <Card className="bg-muted/40 p-4">
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-lg font-bold">
+            Hola, {me?.display_name ?? profile?.display_name ?? '—'}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Tu pareja todavía no se unió al hogar. Consíguela en la pestaña{' '}
-            <Link to="/app/hogar" className="font-medium text-primary">
-              Hogar
-            </Link>
-            .
+            {household?.name ?? 'Tu hogar'}
+            {me && partner
+              ? ` · ${partner.display_name} y tú`
+              : ' · invita a tu pareja'}
           </p>
-        </Card>
-      ) : null}
+        </div>
+        {!secondMember && household ? (
+          <Button asChild variant="outline" size="sm">
+            <Link to="/app/hogar">
+              Invita a tu pareja
+              <ArrowRightIcon />
+            </Link>
+          </Button>
+        ) : null}
+      </header>
 
       {catalogQuery.isLoading ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {Array.from({ length: 10 }).map((_, index) => (
-            <Skeleton key={index} className="aspect-[2/3] rounded-lg" />
-          ))}
-        </div>
+        <Skeleton className="h-36 w-full rounded-lg" />
       ) : null}
 
       {catalogQuery.isError ? (
         <Card className="bg-destructive/10 p-4">
           <p role="alert" className="text-sm text-destructive">
-            No se pudo cargar tu catálogo.
+            No se pudieron cargar los datos de tu Dashboard.
           </p>
         </Card>
       ) : null}
 
-      {!catalogQuery.isLoading &&
-      !catalogQuery.isError &&
-      filtered.length === 0 ? (
-        <Card className="flex flex-col items-center gap-2 bg-muted/40 p-8 text-center">
-          <p className="text-sm font-medium">
-            {filter === 'all' ? 'Tu catálogo está vacío' : 'Nada por aquí'}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Busca una película o serie y añádela para tenerla a la vista.
-          </p>
-          <Button asChild className="mt-2">
-            <Link
-              to="/app/search"
-              search={{ q: '' }}
-              onClick={() =>
-                void navigate({ to: '/app/search', search: { q: '' } })
-              }
-            >
-              Ir a Búsqueda
-              <ArrowRightIcon />
-            </Link>
-          </Button>
-        </Card>
-      ) : null}
+      {!catalogQuery.isLoading && !catalogQuery.isError ? (
+        <>
+          <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {statCards.map(({ key, label }) => (
+              <Card key={key} className="p-3">
+                <p className="text-xl font-bold">{stats[key]}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
+              </Card>
+            ))}
+          </section>
 
-      {filtered.length > 0 ? (
-        <div
-          className={cn(
-            'grid gap-4',
-            'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
-          )}
-        >
-          {filtered.map((item) => (
-            <TitleCard key={item.title.id} item={item} />
-          ))}
-        </div>
+          <WatchTonight />
+
+          <section className="flex flex-col gap-3">
+            <header className="flex items-center gap-2">
+              <ActivityIcon className="size-4 text-muted-foreground" />
+              <h2 className="text-base font-semibold">Actividad reciente</h2>
+            </header>
+            {activity.length === 0 ? (
+              <Card className="bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+                Todavía no hay actividad. Añade títulos y marca lo que estás
+                viendo para empezar.
+              </Card>
+            ) : (
+              <ol className="flex max-w-2xl flex-col divide-y divide-border rounded-lg border border-border">
+                {activity.map((event) => (
+                  <li
+                    key={`${event.at}-${event.text}`}
+                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0">{event.text}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                      {formatRelativeTime(event.at)}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        </>
       ) : null}
     </div>
   )
