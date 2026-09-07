@@ -74,9 +74,13 @@ Enum `watch_status`:
 | "Visto por ambos"    | las filas de ambos usuarios (mismo hogar) tienen `watch_status = 'watched'` |
 | "Visto por uno solo" | exactamente una de las filas del hogar es `'watched'`                       |
 
+"Visto por ambos" **no se almacena** (no hay columna `watched_by_both`): se deriva en memoria en el cliente con `buildCatalog` (`src/lib/catalog.ts`) agrupando las filas de `user_title_state` visibles para el hogar. Ver tests `CT14`.
+
 Consulta "visto por ambos" (ver §9, Q2): se compara el conteo de filas `'watched'` del hogar contra el número de miembros del hogar.
 
 `watched_at date null` registra cuándo el usuario lo vio (para "últimos vistos"); no existe `started_at` para `watching` (YAGNI por ahora).
+
+**Regla de `watched_at` (Fase 4):** la BD es la autoridad. El trigger `private.sync_title_watched_at()` (migración `20260907190000_catalog.sql`) llena `watched_at` con `now()` al marcar `watched` y lo limpia al salir de ese estado, en `INSERT` y `UPDATE` (el cliente solo manda `watch_status`). El CHECK `watched_at is null or watch_status = 'watched'` queda como respaldo si alguien deshabilita el trigger. Ver tests `CT6`–`CT8` y `C3`/`C3b`.
 
 ## 5. Calificaciones (0.5–5)
 
@@ -103,7 +107,7 @@ Decisión: **una reseña por par (usuario, título)**. Sin historial.
 Decisión: **`titles.genres text[]`** con nombres (ej. `{"Drama","Adventure","Sci-Fi"}`).
 
 - Sin tablas `genres`/`title_genres`: para un catálogo pequeño, la normalización en 3 tablas es sobreingeniería.
-- Al agregar un título se llama a TMDB `/movie/{id}` o `/tv/{id}`, que devuelve `genres[]` con nombres y ids; se guardan los nombres (lo que muestra y filtra la UI).
+- Los resultados de `/search/*` solo traen `genre_ids`; la capa TMDB (`src/lib/tmdb/`) resuelve los nombres con las listas `/genre/movie/list` y `/genre/tv/list`, cacheadas una vez por sesión. El detalle on-demand (`/movie/{id}` o `/tv/{id}`) sí devuelve `genres[]` con nombres.
 - Los ids de TMDB no se guardan: no son estables como llave del catálogo local (la llave es `tmdb_id` + `media_type`).
 
 ## 8. Qué se almacena de TMDB y qué se consulta bajo demanda
@@ -123,14 +127,18 @@ Decisión: **`titles.genres text[]`** con nombres (ej. `{"Drama","Adventure","Sc
 
 ### Bajo demanda (nunca en BD)
 
-Detalles completos, elenco y créditos, tráilers, proveedores de streaming, rating/popularidad de TMDB, imágenes adicionales. Se usan para la página de detalle y no cambian los datos propios de WatchUs.
+Detalles completos, elenco y créditos, tráilers, proveedores de streaming, rating/popularidad de TMDB, imágenes adicionales. En Fase 4 el detalle de `/app/title/$titleId` consulta on-demand (`append_to_response=credits,videos`) cast, director, creadores, duración, fecha y tráiler; no cambian los datos propios de WatchUs.
+
+> **Reseñas (diferido):** la tabla `reviews` existe y está cubierta por RLS/tests, pero la UI de reseñas queda para una fase posterior.
 
 ## 9. Evitar títulos duplicados
 
 1. **Constraint único**: `UNIQUE (tmdb_id, media_type)` en `titles`.
-2. **Flujo get-or-create** en el cliente:
-   - `select` de títulos por `tmdb_id` y `media_type` (caché de TanStack Query).
-   - Si no existe, `insert` con `on conflict (tmdb_id, media_type) do nothing` (Supabase `upsert` + `ignoreDuplicates`) y `select` posterior del id. Así dos usuarios que agregan a la vez no crean duplicados (los dos compiten por la misma llave única).
+2. **RPC `get_or_create_title` (Fase 4)**: flujo get-or-create en **una sola llamada** dentro de la BD (`security definer`, migración `20260907190000_catalog.sql`):
+   - `insert into titles (...) on conflict (tmdb_id, media_type) do nothing`
+   - `select` posterior de la fila canónica y devolución.
+   - Dos usuarios que añaden el mismo título a la vez compiten por la misma llave única: el segundo `insert` se convierte en no-op y ambos reciben la misma fila. Sin duplicados posibles.
+3. Estado de usuario: tras el get-or-create, el cliente hace un `upsert` con `onConflict: 'user_id,title_id'` e `ignoreDuplicates` para no tocar un estado existente.
 
 ## 10. Row Level Security
 
@@ -359,12 +367,13 @@ limit 1;
 
 ## Lista de verificación frente a los requisitos
 
-- [x] Un título existe una sola vez (unique `tmdb_id`+`media_type`, get-or-create)
-- [x] Calificación individual por usuario y promedio del hogar
+- [x] Un título existe una sola vez (unique `tmdb_id`+`media_type`, RPC get-or-create)
+- [x] Calificación individual por usuario y promedio del hogar (UI: pasos de 0.5)
 - [x] Favoritos por usuario (flag)
-- [x] Pendiente / viendo / visto + "visto por Jhon/Ella/ambos" (filas por usuario)
-- [x] Reseña única por usuario-título, editable
-- [x] Géneros sin normalización innecesaria (`text[]`)
-- [x] TMDB solo con datos mínimos almacenados
+- [x] Pendiente / viendo / visto + "visto por Jhon/Ella/ambos" (derivado en memoria)
+- [x] `watched_at` consistente por trigger en BD
+- [x] Reseña única por usuario-título, editable (tabla lista; UI diferida)
+- [x] Géneros sin normalización innecesaria (`text[]`, nombres resueltos)
+- [x] TMDB solo con datos mínimos almacenados; detalle on-demand
 - [x] RLS: escritura propia, lectura compartida del hogar
 - [x] Sin nombres hardcodeados (household + profiles)

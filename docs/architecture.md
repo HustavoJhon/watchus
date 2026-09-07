@@ -29,9 +29,9 @@ Supabase cubre Postgres, Auth y RLS. Un backend (Elysia/Bun) no aporta nada por 
 
 Aunque la app está pensada para dos personas, los nombres y la relación entre ambos no deben estar hardcodeados en componentes ni consultas. Una tabla `households` y `profiles.household_id` materializan "quiénes pertenecen a mi grupo", lo que permite derivar conceptos como "visto por ambos" o "¿qué vemos hoy?" consultando al otro usuario por datos, no por constante. Costo: dos tablas pequeñas.
 
-### D-03: TMDB se consulta desde el frontend
+### D-03: TMDB se consulta desde el frontend (v3)
 
-La TMDB API key v4 es una clave de cliente por diseño. Se expone vía `VITE_TMDB_API_KEY` (ver `.env.example`). Ningún secreto de Supabase va al cliente: solo `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+Se usa la **API v3** de TMDB: la clave es un query param `api_key` pensado para clientes. Se expone únicamente vía `VITE_TMDB_API_KEY` (`.env.example`); nunca se escribe en la BD, en storage ni en logs. El idioma de las respuestas es `es-ES`. Ningún secreto de Supabase va al cliente: solo `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. Si `VITE_TMDB_API_KEY` está vacía, la UI muestra un `TmdbError` de tipo `missing-key` sin romper el resto de la app.
 
 ### D-04: la colección de títulos es compartida a nivel de hogar
 
@@ -54,6 +54,22 @@ La sesión la gestiona Supabase (`supabase.auth`) vía `onAuthStateChange`. El e
 ### D-08 (Fase 3): la invitación es un `join_code` rotable
 
 El hogar expone un código corto (`households.join_code`, 8 hex) y las transiciones se hacen por RPC `security definer` (`create_household`, `generate_invitation_code`, `accept_invitation_code`), no por INSERTS directos. La trazabilidad del "quién se puede unir" queda en el trigger `profiles_household_limit` (máximo 2), con `pg_advisory_xact_lock` para evitar carreras.
+
+### D-09 (Fase 4): get-or-create race-safe en una sola llamada
+
+`titles` es compartido: dos usuarios pueden añadir el mismo título a la vez. En vez del flujo cliente de dos pasos (select → insert), la migración `20260907190000_catalog.sql` expone la RPC `security definer get_or_create_title(...)` que hace `insert ... on conflict (tmdb_id, media_type) do nothing` seguido de un `select`, y devuelve la fila canónica. La unicidad la garantiza la constraint única en la BD, no la lógica del cliente. El catálogo la invoca y luego hace un `upsert` (`ignoreDuplicates`) sobre `user_title_state`.
+
+### D-10 (Fase 4): la BD, no el cliente, es la autoridad de `watched_at`
+
+El trigger `private.sync_title_watched_at()` (BEFORE INSERT OR UPDATE sobre `user_title_state`) llena `watched_at` al marcar `watched` y lo limpia al salir de ese estado. El CHECK `watched_at is null or watch_status = 'watched'` queda como respaldo. Así el cliente nunca puede dejar la fila inconsistente.
+
+### D-11 (Fase 4): nombres de género resueltos desde listas cacheadas
+
+TMDB no devuelve nombres en `/search/*`, solo `genre_ids`. La capa `src/lib/tmdb/` obtiene `/genre/movie/list` y `/genre/tv/list` una vez por sesión (promesa cacheada en módulo) y resuelve los ids a nombres en el mapper. El detalle on-demand sí trae `genres[]` con nombres (TMDB v3).
+
+### D-12 (Fase 4): detalle siempre on-demand
+
+La página `/app/title/$titleId` muestra la metadata mínima de `titles` y, si hay clave TMDB, carga en vivo cast, director, creadores, duración, trailer y fechas (`append_to_response=credits,videos`). Nada de eso se persiste; se mantiene el principio "en la BD solo lo mínimo para la UI de WatchUs".
 
 ## Flujo de datos
 
