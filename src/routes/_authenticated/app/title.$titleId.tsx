@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RatingPicker, StatusPicker, StateBadge } from '@/components/catalog'
+import { ReviewsSection } from '@/components/reviews'
 import { useAuth } from '@/lib/auth'
 import { useCatalog, useCatalogMutations } from '@/lib/queries'
 import type { WatchStatus } from '@/lib/catalog'
@@ -267,6 +268,8 @@ function TitleDetailPage() {
               )}
             </div>
           ) : null}
+
+          <ReviewsSection titleId={localTitleId} />
         </div>
       </div>
 

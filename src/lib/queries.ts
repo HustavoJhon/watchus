@@ -19,6 +19,12 @@ import type { WatchStatus } from '@/lib/catalog'
 import type { TitleCandidate } from '@/lib/tmdb/mapper'
 import { searchTitles } from '@/lib/tmdb/search'
 import type { SearchMediaType } from '@/lib/tmdb/search'
+import {
+  deleteReview,
+  getAllReviews,
+  getReviewsForTitle,
+  saveReview,
+} from '@/lib/reviews'
 
 export const queryKeys = {
   profile: (userId: string) => ['profile', userId] as const,
@@ -27,6 +33,8 @@ export const queryKeys = {
   householdProfiles: (householdId: string | undefined) =>
     ['household_profiles', householdId] as const,
   catalog: (userId: string) => ['catalog', userId] as const,
+  reviewForTitle: (titleId: string) => ['reviews', 'title', titleId] as const,
+  reviews: () => ['reviews'] as const,
   titleSearch: (query: string, mediaType: SearchMediaType, page: number) =>
     ['title_search', mediaType, query.trim(), page] as const,
 }
@@ -241,5 +249,86 @@ export function useTitleSearch(
     queryFn: () => searchTitles(query, { mediaType, page }),
     enabled: query.trim().length > 0,
     staleTime: 60 * 1000,
+  })
+}
+
+/**
+ * Household reviews for one title. Shared by the reviews section and cached;
+ * RLS returns only the signed-in user's reviews plus the partner's.
+ */
+export function useTitleReviews(titleId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.reviewForTitle(titleId ?? ''),
+    queryFn: async () => {
+      const { data, error } = await getReviewsForTitle(titleId!)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: titleId != null,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * All household reviews. Used to derive stats (review counts per user) with a
+ * single query instead of hundreds of individual requests.
+ */
+export function useAllReviews(user?: User | null) {
+  return useQuery({
+    queryKey: queryKeys.reviews(),
+    queryFn: async () => {
+      const { data, error } = await getAllReviews()
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: user?.id != null,
+    staleTime: 30 * 1000,
+  })
+}
+
+export function useReviewMutations(user?: User | null): {
+  save: ReturnType<typeof useSaveReviewMutation>
+  remove: ReturnType<typeof useDeleteReviewMutation>
+} {
+  const queryClient = useQueryClient()
+  const userId = user?.id
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['reviews'] })
+  }
+  return {
+    save: useSaveReviewMutation(userId, invalidate),
+    remove: useDeleteReviewMutation(userId, invalidate),
+  }
+}
+
+function useSaveReviewMutation(
+  userId: string | undefined,
+  onSuccess: () => void,
+) {
+  return useMutation({
+    mutationFn: ({
+      titleId,
+      content,
+    }: {
+      titleId: string
+      content: string
+    }) => {
+      if (!userId) throw new Error('Sesión no iniciada.')
+      return saveReview(userId, titleId, content)
+    },
+    onSuccess,
+  })
+}
+
+function useDeleteReviewMutation(
+  userId: string | undefined,
+  onSuccess: () => void,
+) {
+  return useMutation({
+    mutationFn: (titleId: string) => {
+      if (!userId) throw new Error('Sesión no iniciada.')
+      return deleteReview(userId, titleId)
+    },
+    onSuccess,
   })
 }
