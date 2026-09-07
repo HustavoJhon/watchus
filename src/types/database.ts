@@ -38,19 +38,67 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          join_code: string
           name: string
         }
         Insert: {
           created_at?: string
           id?: string
+          join_code?: string
           name: string
         }
         Update: {
           created_at?: string
           id?: string
+          join_code?: string
           name?: string
         }
         Relationships: []
+      }
+      invitations: {
+        Row: {
+          created_at: string
+          expires_at: string
+          household_id: string
+          id: string
+          token: string
+          used_at: string | null
+          used_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          household_id: string
+          id?: string
+          token?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          household_id?: string
+          id?: string
+          token?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'invitations_household_id_fkey'
+            columns: ['household_id']
+            isOneToOne: false
+            referencedRelation: 'households'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'invitations_used_by_fkey'
+            columns: ['used_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -218,7 +266,54 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      accept_invitation_code: {
+        Args: { invite_code: string }
+        Returns: {
+          created_at: string
+          id: string
+          join_code: string
+          name: string
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'households'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_household: {
+        Args: { household_name: string }
+        Returns: {
+          created_at: string
+          id: string
+          join_code: string
+          name: string
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'households'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      generate_invitation_code: {
+        Args: never
+        Returns: {
+          created_at: string
+          expires_at: string
+          household_id: string
+          id: string
+          token: string
+          used_at: string | null
+          used_by: string | null
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'invitations'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       media_type: 'movie' | 'tv'
