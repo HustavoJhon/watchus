@@ -39,6 +39,8 @@ households ──1┼N── profiles ──1┼N── user_title_state ──N
 
 Resultado: 5 tablas de negocio en vez de las 6-8 del borrador, sin perder información.
 
+> **Nota (Fase 3):** la invitación al hogar se simplificó con un `join_code` rotable en `households`. El diseño inicial con tabla `invitations` (tokens de un uso) se descartó en la migración `20260907180000_simplify_household_invitations.sql` y la tabla se eliminó: con un hogar privado de máximo 2 integrantes y rotación del código a demanda, el token de un uso era sobredimensionado.
+
 ## 3. Favoritos: dónde viven
 
 Decisión: **`is_favorite boolean not null default false` dentro de `user_title_state`**, no una tabla `favorites`.
@@ -149,9 +151,21 @@ Helpers que se usarán en las políticas:
 | Operación | Política                                                                                                        |
 | --------- | --------------------------------------------------------------------------------------------------------------- |
 | SELECT    | `id` es mi hogar: `exists (select 1 from profiles where household_id = households.id and user_id = auth.uid())` |
-| INSERT    | Sin acceso directo (onboarding por trigger/setup)                                                               |
+| INSERT    | Sin acceso directo (onboarding por RPC `create_household`)                                                       |
 | UPDATE    | Solo si el hogar es el mío                                                                                      |
 | DELETE    | Sin acceso directo                                                                                              |
+
+### RPCs de hogar (Fase 3)
+
+El onboarding y la invitación no insertan filas directamente: pasan por RPCs `security definer` (`set search_path = ''`), que validan reglas que una política RLS no puede expresar.
+
+| Función                          | Reglas                                                     |
+| -------------------------------- | ---------------------------------------------------------- |
+| `create_household(name)`         | El llamante no pertenece a ningún hogar; crea el hogar y lo asigna. Devuelve el hogar (con `join_code`). |
+| `generate_invitation_code()`     | Rota el `join_code` del hogar del llamante. Devuelve el hogar actualizado. |
+| `accept_invitation_code(code)`   | El llamante no pertenece a ningún hogar; `join_code` (mayúsculas) debe existir. El trigger max-2 rechaza si el hogar está lleno. Devuelve el hogar. |
+
+**Límite de 2 integrantes:** trigger `private.profile_household_limit()` antes de `insert`/`update of household_id` en `profiles`. Usa `pg_advisory_xact_lock` para que dos `accept` simultáneos no traspasen el límite, y eleva `check_violation` ("Household is full…") si ya hay 2 miembros. Ver tests en `supabase/tests/rls/04_household_phase3.sql`.
 
 ### `profiles`
 
@@ -215,11 +229,12 @@ $$;
 
 #### `households`
 
-| Columna      | Tipo        | Notas                       |
-| ------------ | ----------- | --------------------------- |
-| `id`         | uuid PK     | `default gen_random_uuid()` |
-| `name`       | text        | nombre del hogar            |
-| `created_at` | timestamptz | `default now()`             |
+| Columna      | Tipo        | Notas                                                              |
+| ------------ | ----------- | ------------------------------------------------------------------- |
+| `id`         | uuid PK     | `default gen_random_uuid()`                                         |
+| `name`       | text        | nombre del hogar                                                    |
+| `join_code`  | text not null | código de invitación, 8 hex mayúsculas (ej. `A1B2C3D4`); `unique`; visible solo para miembros vía RLS |
+| `created_at` | timestamptz | `default now()`                                                     |
 
 #### `profiles`
 

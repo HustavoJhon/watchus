@@ -11,6 +11,11 @@ Una aplicación web para que dos personas lleven una colección compartida de pe
 - TMDB API
 - Desplegado en Vercel
 
+## Estado
+
+- **Fase 3 (en curso):** auth de Supabase (login/registro/recuperación de contraseña), perfil, hogar de 2 integrantes con invitación por `join_code`, todo protegido con RLS probada en `supabase/tests/rls/`.
+- Próximo: catálogo compartido (TMDB) y dashboard del hogar.
+
 ## Documentación
 
 - [Arquitectura](./docs/architecture.md)

@@ -41,6 +41,20 @@ La TMDB API key v4 es una clave de cliente por diseño. Se expone vía `VITE_TMD
 
 Cada usuario escribe únicamente sus filas (`user_id = auth.uid()`), pero lee las de su hogar para poder ver la colección completa y "visto por ambos".
 
+### D-06 (Fase 3): estado de sesión en un store de módulo, no en localStorage
+
+La sesión la gestiona Supabase (`supabase.auth`) vía `onAuthStateChange`. El estado de autenticación vive en un store de módulo (`src/lib/auth`) con publicación-suscripción (`subscribeToAuth`) y se expone a React con `useSyncExternalStore` (`useAuth`). `ensureAuthLoaded()` resuelve la sesión inicial antes de pintar rutas protegidas. Nada de tokens en `localStorage` manual.
+
+### D-07 (Fase 3): guardas de rutas con `beforeLoad`
+
+- `/` redirige a `/app` si hay sesión y a `/login` si no.
+- Los layouts `_public` y `_authenticated` son pathless: el primero redirige a `/` a usuarios autenticados; el segundo a `/login` si no hay sesión.
+- `reset-password` **no** cuelga de `_public`: el flujo de recuperación crea una sesión y un guard `_public` lo desviaría en bucle.
+
+### D-08 (Fase 3): la invitación es un `join_code` rotable
+
+El hogar expone un código corto (`households.join_code`, 8 hex) y las transiciones se hacen por RPC `security definer` (`create_household`, `generate_invitation_code`, `accept_invitation_code`), no por INSERTS directos. La trazabilidad del "quién se puede unir" queda en el trigger `profiles_household_limit` (máximo 2), con `pg_advisory_xact_lock` para evitar carreras.
+
 ## Flujo de datos
 
 ```
