@@ -67,6 +67,17 @@ describe('tmdbGet', () => {
     await expect(tmdbGet('/x')).rejects.toMatchObject({ kind: 'network' })
   })
 
+  it('reports a friendly message when the request times out', async () => {
+    vi.stubEnv('VITE_TMDB_API_KEY', 'secret')
+    const aborted = new Error('aborted')
+    aborted.name = 'AbortError'
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(aborted))
+    await expect(tmdbGet('/x')).rejects.toMatchObject({
+      kind: 'network',
+      message: 'TMDB tardó demasiado en responder. Inténtalo de nuevo.',
+    })
+  })
+
   it('throws an invalid-response error when json is unparsable', async () => {
     vi.stubEnv('VITE_TMDB_API_KEY', 'secret')
     stubFetch({

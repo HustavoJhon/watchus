@@ -1,6 +1,8 @@
 export const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 export const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p'
 export const TMDB_LANGUAGE = 'es-ES'
+/** Upper bound for a single TMDB request; aborts hung connections. */
+export const TMDB_TIMEOUT_MS = 8_000
 
 /**
  * Returns the TMDB API key from the environment. The key is only ever used in
