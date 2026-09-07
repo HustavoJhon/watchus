@@ -42,10 +42,17 @@ function WatchlistPage() {
       ) : null}
 
       {catalogQuery.isError ? (
-        <Card className="bg-destructive/10 p-4">
+        <Card className="flex flex-col items-start gap-2 bg-destructive/10 p-4">
           <p role="alert" className="text-sm text-destructive">
             No se pudo cargar tu lista de pendientes.
           </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void catalogQuery.refetch()}
+          >
+            Reintentar
+          </Button>
         </Card>
       ) : null}
 

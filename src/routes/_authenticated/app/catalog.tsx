@@ -60,6 +60,7 @@ function CatalogPage() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar películas o series en TMDB…"
             className="pl-8"
+            aria-label="Buscar películas o series en TMDB"
           />
         </div>
         <Button type="submit" disabled={!search.trim()}>
@@ -107,10 +108,17 @@ function CatalogPage() {
       ) : null}
 
       {catalogQuery.isError ? (
-        <Card className="bg-destructive/10 p-4">
+        <Card className="flex flex-col items-start gap-2 bg-destructive/10 p-4">
           <p role="alert" className="text-sm text-destructive">
             No se pudo cargar tu catálogo.
           </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void catalogQuery.refetch()}
+          >
+            Reintentar
+          </Button>
         </Card>
       ) : null}
 
