@@ -150,7 +150,7 @@ export function useCatalogMutations(user?: User | null): {
     void queryClient.invalidateQueries({ queryKey: ['catalog'] })
   }
   return {
-    add: useAddTitleMutation(userId),
+    add: useAddTitleMutation(userId, invalidate),
     setStatus: useSetStatusMutation(userId, invalidate),
     clearStatus: useClearStatusMutation(userId, invalidate),
     rate: useRateMutation(userId, invalidate),
@@ -158,12 +158,16 @@ export function useCatalogMutations(user?: User | null): {
   }
 }
 
-function useAddTitleMutation(userId: string | undefined) {
+function useAddTitleMutation(
+  userId: string | undefined,
+  onSuccess: () => void,
+) {
   return useMutation({
     mutationFn: (candidate: TitleCandidate) => {
       if (!userId) throw new Error('Sesión no iniciada.')
       return addTitleToCatalog(candidate, userId)
     },
+    onSuccess,
   })
 }
 
