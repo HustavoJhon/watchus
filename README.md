@@ -10,3 +10,8 @@ Una aplicación web para que dos personas lleven una colección compartida de pe
 - Supabase (PostgreSQL + Auth + RLS)
 - TMDB API
 - Desplegado en Vercel
+
+## Documentación
+
+- [Arquitectura](./docs/architecture.md)
+- [Modelo de datos](./docs/data-model.md)
