@@ -129,7 +129,7 @@ Decisión: **`titles.genres text[]`** con nombres (ej. `{"Drama","Adventure","Sc
 
 Detalles completos, elenco y créditos, tráilers, proveedores de streaming, rating/popularidad de TMDB, imágenes adicionales. En Fase 4 el detalle de `/app/title/$titleId` consulta on-demand (`append_to_response=credits,videos`) cast, director, creadores, duración, fecha y tráiler; no cambian los datos propios de WatchUs.
 
-> **Reseñas (diferido):** la tabla `reviews` existe y está cubierta por RLS/tests, pero la UI de reseñas queda para una fase posterior.
+> **Reseñas (Fase 5):** la UI de reviews ahora está implementada en el detalle de título y cubierta por RLS/suite (`06_phase5.sql`). Una reseña por par (usuario, título); el cliente hace upsert por PK y delete. Ni las estadísticas ni "¿Qué vemos hoy?" añaden tablas ni RPCs: todo se deriva en el cliente desde las queries cacheadas (ver D-13/D-14 en `architecture.md`).
 
 ## 9. Evitar títulos duplicados
 

@@ -71,6 +71,18 @@ TMDB no devuelve nombres en `/search/*`, solo `genre_ids`. La capa `src/lib/tmdb
 
 La página `/app/title/$titleId` muestra la metadata mínima de `titles` y, si hay clave TMDB, carga en vivo cast, director, creadores, duración, trailer y fechas (`append_to_response=credits,videos`). Nada de eso se persiste; se mantiene el principio "en la BD solo lo mínimo para la UI de WatchUs".
 
+### D-13 (Fase 5): estadísticas y "actividad" derivadas en cliente
+
+Dashboard, estadísticas (`/app/stats`) y actividad reciente NO agregan nada en la BD. Parten de dos queries ya existentes y cacheadas (`useCatalog`, `useAllReviews`) y calculan en memoria con funciones puras (`src/lib/stats.ts`, `src/lib/format.ts`): totales, movie/tv, vistos por ambos, rating promedio por usuario, distribución de ratings y géneros más vistos. Las stats de cada miembro se leen de las columnas `own*` (quien ve) y `partner*` (el compañero): `computeStats` recibe `viewerId` y reparte los campos. Para un sistema de dos personas, una query bien diseñada + derivación en cliente pesa menos que RPCs de agregación; no hay tablas de estadísticas.
+
+### D-14 (Fase 5): "¿Qué vemos hoy?" con candidatos deterministas y selección aleatoria
+
+La selección es un sorteo (fácil "Elegir otra") sobre un conjunto determinista: 1) títulos que ambos tienen en pendientes, si los hay; 2) si no, títulos donde al menos uno lo tiene en pendientes; siempre excluyendo los vistos por ambos. La lógica pura (`src/lib/watch.ts`) es testeable con un RNG inyectado; el componente repite la tirada sin almacenar nada (ni tabla, ni `recommended_title_id`). Sin IA ni recomendaciones TMDB.
+
+### D-15 (Fase 5): reviews con PK natural y RLS sin cambios
+
+No hubo migración: la tabla `reviews` (PK `(user_id, title_id)`, `checks` de contenido no vacío) y sus políticas de Fase 1 ya cubrían el modelo aprobado (una review por usuario/título, editable, sin historial). El cliente solo usa upsert por PK y delete; la RLS impide crear/editar/eliminar reviews ajenas y aislar hogares (suite `06_phase5.sql`).
+
 ## Flujo de datos
 
 ```

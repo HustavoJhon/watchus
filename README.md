@@ -13,9 +13,9 @@ Una aplicación web para que dos personas lleven una colección compartida de pe
 
 ## Estado
 
-- **Fase 4 (en curso):** catálogo compartido con TMDB — búsqueda (movie/tv/all, géneros en español, paginada), get-or-create race-safe en `titles`, estados individuales (pendiente/viendo/visto con `watched_at`), favoritos, calificación 0.5–5, "visto por ambos" derivado en memoria, detalle del título con TMDB on-demand (sin persistir), tests SQL RLS (`supabase/tests/rls/`) y unitarios (vitest).
+- **Fase 5 (completada):** dashboard en `/app` con totales, "¿Qué vemos hoy?" y actividad reciente; catálogo movido a `/app/catalog`; estadísticas en `/app/stats` (totales, movie/tv, vistos por ambos, ratings, géneros top) derivadas en cliente; reseñas con UI (crear/editar/eliminar) en el detalle del título; tests SQL (`06_phase5.sql` incluida en la suite) y unitarios (stats/QVH). Cuenta de prueba: `hustavojhon@gmail.com` / `allittakes`.
+- **Fase 4 (completada):** catálogo compartido con TMDB — búsqueda (movie/tv/all, géneros en español, paginada), get-or-create race-safe en `titles`, estados individuales (pendiente/viendo/visto con `watched_at`), favoritos, calificación 0.5–5, "visto por ambos" derivado en memoria, detalle del título con TMDB on-demand (sin persistir), tests SQL RLS (`supabase/tests/rls/`) y unitarios (vitest).
 - Fase 3: auth (login/registro/recuperación), perfil, hogar de 2 integrantes con invitación por `join_code`, RLS probada.
-- Diferido: dashboard/estadísticas y reseñas (los datos ya existen en `reviews`; falta la UI).
 
 ## Documentación
 
