@@ -143,19 +143,26 @@ end $$;
 
 -- C3b: el CHECK sigue siendo backstop si se deshabilita el trigger
 do $$ begin
+  set local role postgres;
+  alter table public.user_title_state
+    disable trigger user_title_state_sync_watched_at;
+
+  set local role authenticated;
   begin
-    alter table public.user_title_state
-      disable trigger user_title_state_sync_watched_at;
     update public.user_title_state
       set watch_status = 'watchlist', watched_at = '2026-09-03'
       where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
         and title_id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1';
+    set local role postgres;
     alter table public.user_title_state
       enable trigger user_title_state_sync_watched_at;
+    set local role authenticated;
     raise exception 'C3b FAIL: constraint no enforced';
   exception when check_violation then
+    set local role postgres;
     alter table public.user_title_state
       enable trigger user_title_state_sync_watched_at;
+    set local role authenticated;
     raise notice 'C3b OK watched_at_requires_watched_backstop';
   end;
 end $$;
