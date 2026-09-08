@@ -1,11 +1,27 @@
+import type { Session } from '@supabase/supabase-js'
 import type { AuthState } from './state'
 import { initialAuthState } from './state'
 import { supabase } from '@/lib/supabase'
 
 let currentState: AuthState = initialAuthState
 const handlers = new Set<(state: AuthState) => void>()
+/**
+ * Cached wrapper for the currently authenticated session. Kept per session
+ * reference so that repeated auth events with the same session produce the
+ * exact same AuthState object (referential stability for the store snapshot).
+ */
+let sessionState: AuthState | null = null
+
+function authStateFor(session: Session | null): AuthState {
+  if (session === null) return initialAuthState
+  if (sessionState === null || sessionState.session !== session) {
+    sessionState = { status: 'authenticated', user: session.user, session }
+  }
+  return sessionState
+}
 
 function emit(state: AuthState) {
+  if (state === currentState) return
   currentState = state
   for (const handler of handlers) {
     handler(state)
@@ -23,15 +39,7 @@ export function getAuthState(): AuthState {
 export async function loadInitialAuth(): Promise<AuthState> {
   const { data, error } = await supabase.auth.getSession()
 
-  if (error || data.session === null) {
-    emit(initialAuthState)
-  } else {
-    emit({
-      status: 'authenticated',
-      user: data.session.user,
-      session: data.session,
-    })
-  }
+  emit(authStateFor(error || data.session === null ? null : data.session))
 
   return currentState
 }
@@ -42,22 +50,23 @@ export interface AuthListener {
 }
 
 /**
- * Registers an auth state listener. The provided callback receives the
- * current snapshot immediately (no race with the initial load) and every
- * future change (SIGNED_IN / SIGNED_OUT / TOKEN_REFRESHED).
+ * Registers an auth state listener. The callback is invoked on every future
+ * auth change (SIGNED_IN / SIGNED_OUT / TOKEN_REFRESHED / INITIAL_SESSION)
+ * that actually changes the state. `dispose` releases the listener AND the
+ * underlying Supabase Auth subscription; `unsubscribe` only detaches this
+ * handler.
+ *
+ * The current state is NOT delivered synchronously here: `useSyncExternalStore`
+ * re-reads the snapshot itself after subscribing, so notifying inside
+ * `subscribe` is both unnecessary and a source of render loops.
  */
 export function subscribeToAuth(
   onAuthStateChange: (state: AuthState) => void,
 ): AuthListener {
   handlers.add(onAuthStateChange)
-  onAuthStateChange(currentState)
 
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    emit(
-      session !== null
-        ? { status: 'authenticated', user: session.user, session }
-        : initialAuthState,
-    )
+    emit(authStateFor(session))
   })
 
   return {
