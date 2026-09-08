@@ -1,17 +1,19 @@
 # Producción — WatchUs (Vercel + Supabase Cloud)
 
-Documento de referencia para el primer despliegue. **Nada de esto se ha
-ejecutado todavía** (la Fase 6 solo prepara y documenta).
+Estado: **desplegado y validado** (Fase 7, 2026-09-08). Referencia operativa
+del entorno de producción real.
 
 ## 1. Variables de entorno
 
-Solo existen tres variables, todas de cliente:
+Solo existen tres variables, todas de cliente. En producción están definidas
+en Vercel → Project → Settings → Environment Variables (targets production,
+preview y development):
 
-| Variable                 | Dónde                                              | Valor ej.                  |
+| Variable                 | Dónde                                              | Valor en prod (ref)        |
 | ------------------------ | -------------------------------------------------- | -------------------------- |
-| `VITE_SUPABASE_URL`      | Supabase → Settings → API                          | `https://xxxx.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API (publishable `anon` key) | `eyJhbGciOi…`              |
-| `VITE_TMDB_API_KEY`      | TMDB → Settings → API                              | `a1b2…`                    |
+| `VITE_SUPABASE_URL`      | Supabase → Settings → API                          | `https://qgrjvafeqlrimttyekxq.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API (publishable `anon` key) | key `anon` del proyecto    |
+| `VITE_TMDB_API_KEY`      | TMDB → Settings → API (v3 read-only)               | key `bbbcd87…`             |
 
 Reglas de hierro:
 
@@ -22,40 +24,46 @@ Reglas de hierro:
 - La key de TMDB es una **v3 read-only** pensada para clientes (se envía como
   query param). No hace falta backend para ocultarla.
 
-Crear un `.env.production.local` (o definir las variables en Vercel → Project →
-Settings → Environment Variables) con esos tres valores.
+Para `vite preview` local con valores de prod, crear un `.env.production.local`
+(ignorado) con los tres valores.
 
 ## 2. Supabase Cloud
 
-1. Crear proyecto en https://supabase.com (free tier sirve).
-2. Conectar el CLI local al proyecto sin reescribir lo remoto:
+Proyecto real: org `itsqmorajxzinebaiptl`, project **`watchus`**, ref
+`qgrjvafeqlrimttyekxq` (región Oeste-US, plan free). El CLI local está
+enlazado (`supabase link`) con ese proyecto.
+
+1. Conectar el CLI local al proyecto sin reescribir lo remoto:
 
    ```sh
-   ~/.local/bin/supabase link --project-ref <PROJECT_REF>
-   # responde no a sobrescribir el archivo config.toml remoto
+   ~/.local/bin/supabase link --project-ref qgrjvafeqlrimttyekxq
    ```
 
-3. Aplicar las migraciones (ordena y ejecuta `supabase/migrations/*` en
+2. Aplicar las migraciones (ordena y ejecuta `supabase/migrations/*` en
    orden; no borra nada remoto):
 
    ```sh
    ~/.local/bin/supabase db push
    ```
 
-4. Regenerar los tipos locales si el esquema produjo cambios:
+   Nota: en el esquema los defaults de `join_code` e `invitations.token`
+   usan `extensions.gen_random_bytes(...)` **cualificado** — en Cloud la
+   función de `pgcrypto` vive en el schema `extensions`, fuera del
+   `search_path` de la sesión de migración (commit `b7a45eb`).
+
+3. Regenerar los tipos locales si el esquema produjo cambios:
 
    ```sh
-   ~/.local/bin/supabase gen types typescript --project-id <PROJECT_REF> \
+   ~/.local/bin/supabase gen types typescript --project-id qgrjvafeqlrimttyekxq \
      --schema public > src/types/database.ts
    ```
 
-### Config de Auth en el panel
+### Config de Auth (aplicada en el panel/proyecto)
 
-- **Site URL**: la URL de Vercel (ej. `https://watchus.vercel.app`), con el
-  subdominio exacto.
-- **Redirect URLs**: añadir como mínimo
-  `https://watchus.vercel.app/reset-password**` (el flujo de recuperación
-  navega a `/reset-password?recovery=true`).
+- **Site URL**: `https://watchus-orcin.vercel.app`.
+- **Redirect URLs** (`uri_allow_list`): mínimo
+  `https://watchus-orcin.vercel.app/reset-password?recovery=true` (el flujo
+  de recuperación navega a `/reset-password?recovery=true`).
 - **Email**: confirmación de email **habilitada** en Cloud (en local está
   desactivada para el dev loop). El registro ya contempla ambos casos
   (sesión inmediata vs. "revisa tu correo").
@@ -63,6 +71,10 @@ Settings → Environment Variables) con esos tres valores.
   Cloud se controlan desde el panel.
 
 ## 3. Vercel
+
+Proyecto real: **`watchus`** bajo la cuenta `hustavojhon`, conectado al repo
+GitHub `HustavoJhon/watchus` (rama `main`). URL de producción:
+`https://watchus-orcin.vercel.app` (deploy automático al hacer push).
 
 No hace falta configuración de build: Vite construye a `dist` (valor
 predeterminado de Vercel para `vite build`).
@@ -72,19 +84,27 @@ predeterminado de Vercel para `vite build`).
   navegación directa a rutas del router (p.ej. `/app/catalog` o
   `/reset-password?recovery=true`) sirva `index.html` en vez de 404. No hay
   más configuración.
-- Definir las tres variables de entorno anteriores y desplegar desde el repo
-  (rama principal).
+- Las tres variables de entorno están definidas en Vercel (production,
+  preview y development). Desplegar desde el repo (rama principal) o con
+  `npx vercel --prod` desde local.
 
 ## 4. Checklist de puesta en producción
 
-1. Base de datos: `supabase db push` contra el proyecto Cloud.
-2. Auth: `site_url` y redirect con la URL final; confirmación de email ON.
+Estado en Fase 7: **completado y validado en prod** (2026-09-08).
+
+1. Base de datos: `supabase db push` contra el proyecto Cloud — aplicadas las
+   4 migraciones.
+2. Auth: `site_url` y `uri_allow_list` con la URL final; confirmación de email
+   ON.
 3. Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
-   `VITE_TMDB_API_KEY` en Vercel (y `.env.production.local` para `vite preview`).
-4. Tipos: `supabase gen types typescript` tras la migración (paso 4 arriba).
-5. Vercel: importar repo, preset Vite, redeploy.
-6. Smoke manual: registro → crear hogar → invitación → búsqueda TMDB → añadir
-   título → estados → review → logout → recovery.
+   `VITE_TMDB_API_KEY` en Vercel.
+4. Tipos: `supabase gen types typescript` tras la migración.
+5. Vercel: proyecto conectado a Git, preset Vite, deploy automático.
+6. Smoke (realizado en el deploy de Fase 7): registro/creación de usuario
+   (confirmado vía Admin API), login → dashboard, crear hogar + unirse +
+   rotar código, aislamiento RLS entre hogares (2 usuarios por hogar, límite
+   activo), catálogo TMDB (búsqueda y get-or-create), estados y reviews
+   (compartidos dentro del hogar, ocultos fuera), recovery 200.
 
 ## 5. Decisiones evaluadas y diferidas
 
