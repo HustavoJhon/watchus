@@ -1,5 +1,5 @@
-import { createFileRoute, Navigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { CopyIcon, RefreshCwIcon } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -24,6 +24,7 @@ export const Route = createFileRoute('/_authenticated/app/hogar')({
 function HouseholdPage() {
   const auth = useAuth()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { profile, household, members, secondMember, isLoading } =
     useHouseholdContext(auth.user)
 
@@ -31,12 +32,18 @@ function HouseholdPage() {
   const [regenerating, setRegenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!isLoading && !profile?.household_id) {
+      void navigate({ to: '/onboarding' })
+    }
+  }, [isLoading, profile?.household_id, navigate])
+
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Cargando tu hogar…</p>
   }
 
   if (!profile?.household_id) {
-    return <Navigate to="/onboarding" />
+    return null
   }
 
   if (!household) {
