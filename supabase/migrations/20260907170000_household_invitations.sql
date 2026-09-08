@@ -6,7 +6,8 @@
 -- 1. Join code for households (used for invitation links)
 -- ============================================================
 alter table public.households
-  add column join_code text not null default upper(encode(gen_random_bytes(4), 'hex'));
+  add column join_code text not null default
+    upper(encode(extensions.gen_random_bytes(4), 'hex'));
 
 create unique index households_join_code_unique on public.households (join_code);
 
@@ -19,7 +20,7 @@ comment on column public.households.join_code is
 create table public.invitations (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households (id) on delete cascade,
-  token text not null default encode(gen_random_bytes(16), 'hex'),
+  token text not null default encode(extensions.gen_random_bytes(16), 'hex'),
   created_at timestamptz not null default now(),
   expires_at timestamptz not null default (now() + interval '7 days'),
   used_by uuid references public.profiles (id) on delete set null,
