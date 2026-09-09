@@ -11,6 +11,7 @@ import {
   buildCatalog,
   clearWatchStatus,
   getCatalog,
+  removeTitleFromCatalog,
   setFavorite,
   setRating,
   setWatchStatus,
@@ -143,6 +144,7 @@ export function useCatalogMutations(user?: User | null): {
   clearStatus: ReturnType<typeof useClearStatusMutation>
   rate: ReturnType<typeof useRateMutation>
   favorite: ReturnType<typeof useFavoriteMutation>
+  remove: ReturnType<typeof useRemoveTitleMutation>
 } {
   const queryClient = useQueryClient()
   const userId = user?.id
@@ -155,6 +157,7 @@ export function useCatalogMutations(user?: User | null): {
     clearStatus: useClearStatusMutation(userId, invalidate),
     rate: useRateMutation(userId, invalidate),
     favorite: useFavoriteMutation(userId, invalidate),
+    remove: useRemoveTitleMutation(userId, invalidate),
   }
 }
 
@@ -235,6 +238,30 @@ function useFavoriteMutation(
       return setFavorite(userId, titleId, favorite)
     },
     onSuccess,
+  })
+}
+
+/**
+ * Removes the caller's own state for a title. Also invalidates reviews
+ * because the title may have been fully removed (orphaned), which deletes
+ * its review rows as well.
+ */
+function useRemoveTitleMutation(
+  userId: string | undefined,
+  onSuccess: () => void,
+) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (titleId: string) => {
+      if (!userId) throw new Error('Sesión no iniciada.')
+      return removeTitleFromCatalog(titleId)
+    },
+    onSuccess: (removed) => {
+      onSuccess()
+      if (removed) {
+        void queryClient.invalidateQueries({ queryKey: ['reviews'] })
+      }
+    },
   })
 }
 

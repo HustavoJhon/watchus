@@ -169,3 +169,19 @@ export async function setFavorite(
     )
   if (error) throw error
 }
+
+/**
+ * Removes the caller's own state (and review) for a title. The shared title
+ * row is deleted by the RPC only when it becomes orphaned (nobody in the
+ * household references it anymore). Returns true when the title itself was
+ * removed, false when the partner still holds it in the shared catalog.
+ */
+export async function removeTitleFromCatalog(
+  titleId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('remove_title_from_catalog', {
+    p_title_id: titleId,
+  })
+  if (error) throw error
+  return data ?? false
+}
