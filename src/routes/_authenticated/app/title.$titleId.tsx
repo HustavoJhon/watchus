@@ -1,11 +1,12 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { HeartIcon } from 'lucide-react'
+import { HeartIcon, Trash2Icon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RatingPicker, StatusPicker, StateBadge } from '@/components/catalog'
+import { RemoveTitleDialog } from '@/components/remove-title-dialog'
 import { ReviewsSection } from '@/components/reviews'
 import { useAuth } from '@/lib/auth'
 import { useCatalog, useCatalogMutations } from '@/lib/queries'
@@ -36,6 +37,7 @@ function TitleDetailPage() {
   const { titleId } = Route.useParams()
   const { tmdbId, mediaType } = Route.useSearch()
   const auth = useAuth()
+  const navigate = useNavigate()
   const catalogQuery = useCatalog(auth.user)
   const mutations = useCatalogMutations(auth.user)
 
@@ -243,6 +245,35 @@ function TitleDetailPage() {
               <p role="alert" className="text-xs text-destructive">
                 No se pudo actualizar el estado.
               </p>
+            ) : null}
+            {item.ownUpdatedAt ? (
+              <div className="border-t border-border pt-2">
+                <RemoveTitleDialog
+                  item={item}
+                  onRemoved={() =>
+                    void navigate({
+                      to: '/app/catalog',
+                      search: {
+                        type: 'all',
+                        status: 'all',
+                        favorites: 'all',
+                        query: '',
+                      },
+                    })
+                  }
+                  trigger={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2Icon className="size-4" />
+                      Quitar del catálogo
+                    </Button>
+                  }
+                />
+              </div>
             ) : null}
           </div>
 
