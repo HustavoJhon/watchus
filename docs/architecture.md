@@ -87,6 +87,14 @@ No hubo migración: la tabla `reviews` (PK `(user_id, title_id)`, `checks` de co
 
 La raíz del router define `errorComponent` (mensaje "Algo salió mal" + Reintentar, sin stack traces; el detalle técnico se loguea en consola) y `notFoundComponent` (pantalla 404 con enlace al inicio). Se eligió no mostrar texto técnico al usuario. Ver también `docs/production.md`, que documenta el checklist de despliegue y las evaluaciones diferidas de **PWA** (no aporta valor offline real con este stack: red necesaria para TMDB/Supabase y auth; se aplaza) y **tests E2E** (la suite RLS SQL + los tests unitarios cubren lo crítico; Playwright se reintroduciría solo con smoke tests si hay regresiones de flujo).
 
+### D-17 (Fase 8): eliminación de títulos solo vía RPC, por usuario y con guarda de orfandad
+
+Ver `docs/data-model.md` (tabla de políticas de `titles`). El DELETE directo sobre `titles` se cerró (se cayó la política permisiva y el `grant`); el borrado pasa por `remove_title_from_catalog`, que elimina solo el estado y la reseña del llamante y borra la fila compartida únicamente cuando queda huérfana. Esto preserva el contrato del catálogo compartido: quitar un título propio nunca afecta los datos de la pareja ni de otros hogares.
+
+### D-18 (Fase 8): filtros de catálogo en search params compartibles + búsqueda local en memoria
+
+Los filtros (tipo, estado, favoritos) viven en los search params de `/app/catalog` (tipados por `validateSearch`), así la URL es compartible, refrescable y el historial mantiene el estado al volver del detalle. El filtrado a aplicar es puro (`src/lib/catalog-filter.ts`) y corre en memoria sobre la query ya cacheada: sin llamadas TMDB extra. La búsqueda del lado del catálogo es local (por nombre). El orden predeterminado sigue siendo `created_at` descendente (recientes agregados); no se añadió control de ordenamiento para no complicar el listado, y la etiqueta de conteo usa concordancia de género derivada del tipo filtrado («3 películas pendientes»).
+
 ## Flujo de datos
 
 ```

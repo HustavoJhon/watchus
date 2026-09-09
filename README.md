@@ -13,6 +13,8 @@ Una aplicación web para que dos personas lleven una colección compartida de pe
 
 ## Estado
 
+- **Fase 8 (completada):** gestión y filtrado del catálogo — eliminación segura por usuario (RPC `remove_title_from_catalog` solo borra el estado/reseña propios y el título compartido solo si queda huérfano; se cierra el DELETE directo sobre `titles` que con CASCADE borraba datos ajenos), filtros combinables Tipo/Estado/Favoritos en search params compartibles, búsqueda local en memoria (sin llamada TMDB), contador con concordancia («3 películas pendientes»), estados vacíos con «Limpiar filtros», menú de eliminación con confirmación en tarjetas y detalle, tests RLS (`07_catalog_management.sql`) y unitarios de filtros.
+- **Fase 7 (completada):** despliegue en producción — Vercel (canónico `https://watchus-orcin.vercel.app`) + Supabase Cloud, smoke tests en prod, comprobaciones en `docs/production.md`.
 - **Fase 6 (completada):** hardening y preparación para producción — errores de render/ruta con fallback en español y sin stack traces, timeout en el cliente TMDB, invalidación de catálogo tras añadir títulos, accesibilidad (labels/aria en español, `aria-current`), retry en tarjetas de error, metadata básica (`lang`, description, theme-color), `vercel.json` con rewrite SPA, checklist de producción documentado en `docs/production.md` (incluye evaluaciones diferidas de PWA y tests E2E).
 - **Fase 5 (completada):** dashboard en `/app` con totales, "¿Qué vemos hoy?" y actividad reciente; catálogo movido a `/app/catalog`; estadísticas en `/app/stats` (totales, movie/tv, vistos por ambos, ratings, géneros top) derivadas en cliente; reseñas con UI (crear/editar/eliminar) en el detalle del título; tests SQL (`06_phase5.sql` incluida en la suite) y unitarios (stats/QVH).
 - **Fase 4 (completada):** catálogo compartido con TMDB — búsqueda (movie/tv/all, géneros en español, paginada), get-or-create race-safe en `titles`, estados individuales (pendiente/viendo/visto con `watched_at`), favoritos, calificación 0.5–5, "visto por ambos" derivado en memoria, detalle del título con TMDB on-demand (sin persistir), tests SQL RLS (`supabase/tests/rls/`) y unitarios (vitest).
@@ -101,4 +103,4 @@ Más detalles de los comandos exactos en `docs/production.md` y en los comentari
 
 ## Producción
 
-Ver [docs/production.md](./docs/production.md): pasos para Supabase Cloud, migraciones (`db push`), Auth (site/redirect URLs), variables en Vercel y la rewrite SPA (`vercel.json`). **No se ha desplegado todavía.**
+Ver [docs/production.md](./docs/production.md): pasos para Supabase Cloud, migraciones (`db push`), Auth (site/redirect URLs), variables en Vercel y la rewrite SPA (`vercel.json`). Producción desplegada en `https://watchus-orcin.vercel.app`.

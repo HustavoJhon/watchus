@@ -186,14 +186,20 @@ El onboarding y la invitación no insertan filas directamente: pasan por RPCs `s
 
 ### `titles` (catálogo compartido)
 
-| Operación | Política                                                 |
-| --------- | -------------------------------------------------------- |
-| SELECT    | `true` para `authenticated` — la colección es compartida |
-| INSERT    | `authenticated` (get-or-create)                          |
-| UPDATE    | `authenticated` (corregir metadata)                      |
-| DELETE    | `authenticated` (quitar de la colección)                 |
+| Operación | Política                                                                |
+| --------- | ----------------------------------------------------------------------- |
+| SELECT    | `true` para `authenticated` — la colección es compartida                |
+| INSERT    | `authenticated` (get-or-create)                                         |
+| UPDATE    | `authenticated` (corregir metadata)                                     |
+| DELETE    | **cerrado desde Fase 8** (sin política ni `grant` para `authenticated`) |
 
-Tradeoff aceptado: con un solo hogar, cualquier autenticado puede tocar el catálogo. El template una cuenta externa en la instancia no ocurre en el uso previsto (2 personas).
+> **Decisión (Fase 8, D-17):** el DELETE directo sobre `titles` se cerró en la migración `20260908120000_catalog_management.sql`. Antes existía `titles_delete_authenticated` `using (true)`, que permitía a cualquier autenticado borrar cualquier fila de `titles` y, por los `ON DELETE CASCADE` de `user_title_state` y `reviews`, destruía también los estados y reseñas de la pareja y de otros hogares. Ahora la eliminación se hace solo vía el RPC `security definer` `remove_title_from_catalog(p_title_id)`:
+>
+> 1. Valida que el llamante tenga una fila propia en `user_title_state` para ese título (si no, `check_violation` "The title is not in your catalog.") — así nadie toca títulos que no pertenecen a su hogar.
+> 2. Borra **solo** las filas propias del llamante (`user_title_state` y `reviews`); la pareja queda intacta.
+> 3. Borra la fila de `titles` solo si queda huérfana (`not exists` en ambas tablas). Devuelve `true` si el título se eliminó por completo, `false` si el hogar aún lo conserva.
+>
+> Ver tests RLS en `supabase/tests/rls/07_catalog_management.sql`.
 
 ### `user_title_state`
 
