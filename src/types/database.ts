@@ -271,6 +271,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      remove_title_from_catalog: {
+        Args: { p_title_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       media_type: 'movie' | 'tv'
