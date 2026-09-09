@@ -32,9 +32,12 @@ function mediaTypeLabel(mediaType: string): string {
 export function TitleCard({
   item,
   footer,
+  menu,
 }: {
   item: CatalogItem
   footer?: ReactNode
+  /** Optional overlay actions (e.g. remove) rendered top-right over the poster. */
+  menu?: ReactNode
 }) {
   const { title } = item
   const poster = posterUrl(title.poster_path, 300)
@@ -42,7 +45,7 @@ export function TitleCard({
     item.ownStatus === 'watched' && item.partnerStatus === 'watched'
 
   return (
-    <article className="group overflow-hidden rounded-lg border border-border bg-card transition-colors hover:bg-accent/40">
+    <article className="group relative overflow-hidden rounded-lg border border-border bg-card transition-colors hover:bg-accent/40">
       <Link
         to="/app/title/$titleId"
         params={{ titleId: title.id }}
@@ -87,6 +90,7 @@ export function TitleCard({
           </div>
         </div>
       </Link>
+      {menu ? <div className="absolute top-2 right-2 z-10">{menu}</div> : null}
       {footer ? (
         <div className="border-t border-border p-2">{footer}</div>
       ) : null}
