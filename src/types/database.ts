@@ -9,6 +9,45 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      household_watchlist_order: {
+        Row: {
+          created_at: string
+          household_id: string
+          position: number
+          title_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          position: number
+          title_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          position?: number
+          title_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'household_watchlist_order_household_id_fkey'
+            columns: ['household_id']
+            isOneToOne: false
+            referencedRelation: 'households'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'household_watchlist_order_title_id_fkey'
+            columns: ['title_id']
+            isOneToOne: false
+            referencedRelation: 'titles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       households: {
         Row: {
           created_at: string
@@ -274,6 +313,10 @@ export type Database = {
       remove_title_from_catalog: {
         Args: { p_title_id: string }
         Returns: boolean
+      }
+      reorder_household_watchlist: {
+        Args: { p_ordered_title_ids: string[] }
+        Returns: undefined
       }
     }
     Enums: {
