@@ -6,6 +6,8 @@ export type TitleRow = Database['public']['Tables']['titles']['Row']
 export type TitleStateRow =
   Database['public']['Tables']['user_title_state']['Row']
 export type WatchStatus = Database['public']['Enums']['watch_status']
+export type WatchlistOrderRow =
+  Database['public']['Tables']['household_watchlist_order']['Row']
 
 /** Catalog entry joined with the viewer's and their partner's state. */
 export interface CatalogItem {
@@ -19,6 +21,20 @@ export interface CatalogItem {
   partnerRating: number | null
   ownUpdatedAt: string | null
   partnerUpdatedAt: string | null
+  /**
+   * Position in the shared household watchlist (1..N), or null when the title
+   * is not part of the order (e.g. never pending). Assigned by the client
+   * after fetching the household order (getWatchlistOrder).
+   */
+  watchlistPosition: number | null
+}
+
+/** Rows of the shared household watchlist order (RLS filters to own household). */
+export function getWatchlistOrder() {
+  return supabase
+    .from('household_watchlist_order')
+    .select('household_id, title_id, position')
+    .order('position', { ascending: true })
 }
 
 interface JoinedStateRow {
@@ -66,6 +82,7 @@ export function buildCatalog(
       partnerRating: partner?.rating ?? null,
       ownUpdatedAt: own?.updated_at ?? null,
       partnerUpdatedAt: partner?.updated_at ?? null,
+      watchlistPosition: null,
     })
   }
   return items
@@ -184,4 +201,16 @@ export async function removeTitleFromCatalog(
   })
   if (error) throw error
   return data ?? false
+}
+
+/**
+ * Atomically rewrites the shared household watchlist order. `orderedTitleIds`
+ * must be exactly the household's current pending titles (both members see the
+ * same list), in the new order 1..N.
+ */
+export async function reorderWatchlist(orderedTitleIds: string[]) {
+  const { error } = await supabase.rpc('reorder_household_watchlist', {
+    p_ordered_title_ids: orderedTitleIds,
+  })
+  if (error) throw error
 }

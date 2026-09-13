@@ -11,12 +11,16 @@ import {
   buildCatalog,
   clearWatchStatus,
   getCatalog,
+  getWatchlistOrder,
   removeTitleFromCatalog,
+  reorderWatchlist,
   setFavorite,
   setRating,
   setWatchStatus,
 } from '@/lib/catalog'
 import type { WatchStatus } from '@/lib/catalog'
+import type { CatalogItem } from '@/lib/catalog'
+import { applyPendingOrder, attachWatchlistOrder } from '@/lib/catalog-order'
 import type { TitleCandidate } from '@/lib/tmdb/mapper'
 import { searchTitles } from '@/lib/tmdb/search'
 import type { SearchMediaType } from '@/lib/tmdb/search'
@@ -126,16 +130,44 @@ export function useHouseholdContext(user?: User | null): HouseholdContext {
  * user. RLS restricts reads to the viewer's and their partner's rows.
  */
 export function useCatalog(user?: User | null) {
+  const queryKey = queryKeys.catalog(user?.id ?? '')
+  const userId = user?.id
   return useQuery({
-    queryKey: queryKeys.catalog(user?.id ?? ''),
+    queryKey,
     queryFn: async () => {
-      const { data, error } = await getCatalog()
-      if (error) throw error
-      return buildCatalog(data ?? [], user!.id)
+      if (!userId) throw new Error('Sesión no iniciada.')
+      const rows = await getCatalogRows(userId)
+      return buildCatalogWithOrder(rows)
     },
-    enabled: user?.id != null,
+    enabled: userId != null,
     staleTime: 30 * 1000,
   })
+}
+
+async function getCatalogRows(userId: string): Promise<{
+  items: CatalogItem[]
+  order: Array<{ title_id: string; position: number }>
+}> {
+  const [catalogQuery, orderQuery] = await Promise.all([
+    getCatalog(),
+    getWatchlistOrder(),
+  ])
+  const { data: rows, error } = catalogQuery
+  if (error) throw error
+  const { data: order, error: orderError } = orderQuery
+  if (orderError) throw orderError
+  return { items: buildCatalog(rows ?? [], userId), order: order ?? [] }
+}
+
+/** Attaches the shared watchlist position and returns the ordered catalog. */
+function buildCatalogWithOrder({
+  items,
+  order,
+}: {
+  items: CatalogItem[]
+  order: Array<{ title_id: string; position: number }>
+}): CatalogItem[] {
+  return attachWatchlistOrder(items, order)
 }
 
 export function useCatalogMutations(user?: User | null): {
@@ -145,6 +177,7 @@ export function useCatalogMutations(user?: User | null): {
   rate: ReturnType<typeof useRateMutation>
   favorite: ReturnType<typeof useFavoriteMutation>
   remove: ReturnType<typeof useRemoveTitleMutation>
+  reorder: ReturnType<typeof useReorderWatchlistMutation>
 } {
   const queryClient = useQueryClient()
   const userId = user?.id
@@ -158,6 +191,7 @@ export function useCatalogMutations(user?: User | null): {
     rate: useRateMutation(userId, invalidate),
     favorite: useFavoriteMutation(userId, invalidate),
     remove: useRemoveTitleMutation(userId, invalidate),
+    reorder: useReorderWatchlistMutation(userId, queryClient),
   }
 }
 
@@ -361,5 +395,42 @@ function useDeleteReviewMutation(
       return deleteReview(userId, titleId)
     },
     onSuccess,
+  })
+}
+
+/**
+ * Reorders the shared household watchlist. Optimistic update with rollback on
+ * error; the invalidation refreshes any other view (e.g. the partner) without
+ * a full reload.
+ */
+function useReorderWatchlistMutation(
+  userId: string | undefined,
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  return useMutation({
+    mutationFn: (orderedTitleIds: string[]) => {
+      if (!userId) throw new Error('Sesión no iniciada.')
+      return reorderWatchlist(orderedTitleIds)
+    },
+    onMutate: async (orderedTitleIds) => {
+      const queryKey = queryKeys.catalog(userId ?? '')
+      await queryClient.cancelQueries({ queryKey })
+      const previous = queryClient.getQueryData<CatalogItem[]>(queryKey)
+      if (previous) {
+        queryClient.setQueryData(queryKey, applyPendingOrder(previous, orderedTitleIds))
+      }
+      return { previous }
+    },
+    onError: (_err, _ordered, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          queryKeys.catalog(userId ?? ''),
+          context.previous,
+        )
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['catalog'] })
+    },
   })
 }

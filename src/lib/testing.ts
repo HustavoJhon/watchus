@@ -34,6 +34,7 @@ export function makeItem(overrides: Partial<CatalogItem> = {}): CatalogItem {
     partnerRating: null,
     ownUpdatedAt: null,
     partnerUpdatedAt: null,
+    watchlistPosition: null,
   }
   return { ...base, ...overrides }
 }

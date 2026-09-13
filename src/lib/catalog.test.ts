@@ -95,6 +95,7 @@ describe('watchedByBoth', () => {
       partnerRating: null,
       ownUpdatedAt: null,
       partnerUpdatedAt: null,
+      watchlistPosition: null,
     }
     expect(watchedByBoth(base)).toBe(true)
     expect(watchedByBoth({ ...base, partnerStatus: 'watchlist' })).toBe(false)

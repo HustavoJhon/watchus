@@ -39,6 +39,7 @@ function item(overrides: Partial<CatalogItem> = {}): CatalogItem {
     partnerRating: null,
     ownUpdatedAt: null,
     partnerUpdatedAt: null,
+    watchlistPosition: null,
     ...overrides,
   }
 }
