@@ -214,6 +214,17 @@ El onboarding y la invitación no insertan filas directamente: pasan por RPCs `s
 
 Igual que `user_title_state` (por usuario, lectura compartida en el hogar).
 
+### `household_watchlist_order` (Fase 9)
+
+| Operación | Política                                                              |
+| --------- | --------------------------------------------------------------------- |
+| SELECT    | `household_id = private.my_household_id()`                            |
+| INSERT    | `with check household_id = private.my_household_id()`                 |
+| UPDATE    | `using household_id = private.my_household_id()` (mismo `with check`) |
+| DELETE    | `using household_id = private.my_household_id()`                      |
+
+Los `SELECT`/`INSERT/UPDATE/DELETE` directos existen para que tests (y clientes) lean la cola y para que el trigger de entrada/salida de pendientes la mantenga, pero el **reordenamiento** siempre pasa por la RPC `reorder_household_watchlist`. `auth.uid()` ejecuta `private.my_household_id()`; el `set search_path = ''` en las funciones evita colisiones con `public`.
+
 ### Trigger de creación de perfil
 
 En `auth.users`, `after insert`:
@@ -330,6 +341,33 @@ Constraints:
 Índices:
 
 - `reviews_title_id_idx` — listar reseñas de un título (y quién las escribió).
+
+#### `household_watchlist_order` (Fase 9)
+
+| Columna        | Tipo        | Notas                                     |
+| -------------- | ----------- | ----------------------------------------- |
+| `household_id` | uuid        | FK → `households(id)` `on delete cascade` |
+| `title_id`     | uuid        | FK → `titles(id)` `on delete cascade`     |
+| `position`     | integer     | 1..N, compartida por los dos miembros     |
+| `created_at`   | timestamptz | `default now()`                           |
+| `updated_at`   | timestamptz | `default now()`                           |
+
+Constraints:
+
+- `PRIMARY KEY (household_id, title_id)`
+- `UNIQUE (household_id, position)` — ninguna posición repetida dentro del hogar
+- `CHECK (position > 0)`
+
+Triggers:
+
+- `public.ensure_watchlist_order_entry()` — `security definer` (`set search_path = ''`), disparado con `execute procedure` desde `user_title_state` (AFTER INSERT OR UPDATE OF `watch_status`). Cuando un miembro pasa un título a `watchlist`, asigna `max(position)+1` (con `pg_advisory_xact_lock` por hogar) e inserta la fila de orden con `on conflict (household_id, title_id) do nothing`: si la fila ya existía (el título vuelve a pendientes), **conserva** su posición. Al salir de `watchlist` el trigger no borra nada.
+- `reorder_household_watchlist(uuid[])` — RPC `security definer` que reescribe posiciones en una transacción y compacta filas conservadas. Ver D-20.
+
+Índices:
+
+- PK cubre `(household_id, title_id)` → RLS filtra por `household_id` (leading column).
+- `household_watchlist_order_title_id_idx` — localizar la fila de orden de un título.
+- La unicidad de posición la da la constraint `household_watchlist_order_position_unique` `(household_id, position)`.
 
 ## Consultas de referencia
 

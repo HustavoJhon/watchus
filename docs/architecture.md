@@ -95,6 +95,14 @@ Ver `docs/data-model.md` (tabla de políticas de `titles`). El DELETE directo so
 
 Los filtros (tipo, estado, favoritos) viven en los search params de `/app/catalog` (tipados por `validateSearch`), así la URL es compartible, refrescable y el historial mantiene el estado al volver del detalle. El filtrado a aplicar es puro (`src/lib/catalog-filter.ts`) y corre en memoria sobre la query ya cacheada: sin llamadas TMDB extra. La búsqueda del lado del catálogo es local (por nombre). El orden predeterminado sigue siendo `created_at` descendente (recientes agregados); no se añadió control de ordenamiento para no complicar el listado, y la etiqueta de conteo usa concordancia de género derivada del tipo filtrado («3 películas pendientes»).
 
+### D-19 (Fase 9): la cola del hogar vive en su propia tabla, no por usuario ni en `titles`
+
+El ordenamiento de pendientes es una propiedad **compartida** (ambos miembros ven la misma cola) y **sostenida** (sobrevive a salir/volver de pendientes), así que no puede ir en `user_title_state` (son filas por usuario) ni en `titles` (tabla global entre hogares). Nueva tabla `household_watchlist_order` con PK `(household_id, title_id)`, `UNIQUE (household_id, position)`, FK `ON DELETE CASCADE` desde `titles` (la eliminación de Fase 8 limpia la orden sola) y `CHECK (position > 0)`. El RLS filtra por `household_id = private.my_household_id()`. **Semántica de estados:** entrar a pendientes coloca la fila al final; salir a viendo/visto **conserva** la fila (por eso un título vuelve a su posición al re-pendarlo). Único cambio de contrato con Fase 8: `remove_title_from_catalog` borra la fila de orden vía CASCADE, sin tocar nada de la pareja.
+
+### D-20 (Fase 9): reordenamiento atómico vía RPC que reescribe solo el bloque pendiente
+
+El drag & drop reordena un **subconjunto** visible (puede haber filtro de tipo), pero la cola real del hogar es otra cosa. La RPC `security definer reorder_household_watchlist(uuid[])` valida que el array pasado sea **exactamente** el conjunto pendiente actual del hogar (sin duplicados ni faltantes) y reescribe posiciones en una transacción: `offset position + 1000000` a todas las filas del hogar, 1..N al bloque pendiente en el orden dado y compactación del resto de filas conservadas detrás del bloque. El cliente pasa siempre la lista pendiente completa: en el drag visible sobre un filtro, `reorderWithSubset` (puro y testeado) reinserta el título movido en la posición del subconjunto y mantiene el resto relativo; el update optimista usa `applyPendingOrder`. El fallback de accesibilidad/teclado son botones ↑/↓ (misma RPC, mismo camino), con `PointerSensor` de dnd-kit a 8 px para no disparar drags en toques accidentales.
+
 ## Flujo de datos
 
 ```
