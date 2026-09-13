@@ -33,11 +33,14 @@ export function TitleCard({
   item,
   footer,
   menu,
+  position,
 }: {
   item: CatalogItem
   footer?: ReactNode
   /** Optional overlay actions (e.g. remove) rendered top-right over the poster. */
   menu?: ReactNode
+  /** Optional shared-watchlist position shown as a top-left badge. */
+  position?: number | null
 }) {
   const { title } = item
   const poster = posterUrl(title.poster_path, 300)
@@ -70,6 +73,7 @@ export function TitleCard({
           <div className="absolute top-2 left-2 flex gap-1">
             <Badge>{mediaTypeLabel(title.media_type)}</Badge>
             {item.ownFavorite ? <Badge variant="default">★</Badge> : null}
+            {position != null ? <Badge variant="outline">#{position}</Badge> : null}
           </div>
           {byBoth ? (
             <div className="absolute right-2 bottom-2">

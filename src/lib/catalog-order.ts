@@ -75,3 +75,38 @@ export function applyPendingOrder(
   const rest = items.filter((item) => !orderedIds.has(item.title.id))
   return [...ordered, ...rest]
 }
+
+/**
+ * Recomputes the full pending order when only a filtered subset is visible
+ * (e.g. a movie-only view). `displayedIds` must be a subsequence of
+ * `fullIds`; the item at `from` moves to `to` inside the subset, and the
+ * hidden items keep their relative place in the full list. Returns the new
+ * full id order (the full pending set, as required by the RPC).
+ */
+export function reorderWithSubset(
+  fullIds: string[],
+  displayedIds: string[],
+  from: number,
+  to: number,
+): string[] {
+  if (
+    from < 0 ||
+    to < 0 ||
+    from >= displayedIds.length ||
+    to >= displayedIds.length ||
+    from === to
+  ) {
+    return fullIds
+  }
+  const movedId = displayedIds[from]
+  const newDisplayed = moveItem(displayedIds, from, to)
+  const without = fullIds.filter((id) => id !== movedId)
+  if (to === 0) {
+    return [movedId, ...without]
+  }
+  const previous = newDisplayed[to - 1]
+  const at = without.indexOf(previous)
+  const next = [...without]
+  next.splice(at + 1, 0, movedId)
+  return next
+}

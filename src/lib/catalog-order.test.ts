@@ -4,6 +4,7 @@ import {
   attachWatchlistOrder,
   compareWatchlistPosition,
   moveItem,
+  reorderWithSubset,
   sortByWatchlistPosition,
 } from '@/lib/catalog-order'
 import { makeItem } from '@/lib/testing'
@@ -88,5 +89,28 @@ describe('applyPendingOrder', () => {
     const a = makeItem()
     const result = applyPendingOrder([a], ['missing-id', a.title.id])
     expect(result.map((i) => i.title.id)).toEqual([a.title.id])
+  })
+})
+
+describe('reorderWithSubset', () => {
+  const full = ['a', 'b', 'c', 'd']
+
+  it('reorders within the visible subset and keeps hidden items in place', () => {
+    // Displayed: ['a', 'c']. Move a after c: it lands right after c.
+    expect(reorderWithSubset(full, ['a', 'c'], 0, 1)).toEqual(['b', 'c', 'a', 'd'])
+  })
+
+  it('moves an item to the first visible slot', () => {
+    // Displayed: ['b', 'c', 'd']. Move d to index 0.
+    expect(reorderWithSubset(full, ['b', 'c', 'd'], 2, 0)).toEqual([
+      'd',
+      'a',
+      'b',
+      'c',
+    ])
+  })
+
+  it('is a no-op when nothing changes', () => {
+    expect(reorderWithSubset(full, ['a', 'c'], 0, 0)).toEqual(full)
   })
 })
