@@ -16,9 +16,9 @@ describe('isInHouseholdWatchlist', () => {
         makeItem({ ownStatus: null, partnerStatus: 'watchlist' }),
       ),
     ).toBe(true)
-    expect(
-      isInHouseholdWatchlist(makeItem({ ownStatus: 'watched' })),
-    ).toBe(false)
+    expect(isInHouseholdWatchlist(makeItem({ ownStatus: 'watched' }))).toBe(
+      false,
+    )
     expect(isInHouseholdWatchlist(makeItem())).toBe(false)
   })
 })
@@ -33,9 +33,9 @@ describe('householdWatchlist', () => {
     const watched = makeItem({ ownStatus: 'watched' })
     const empty = makeItem()
 
-    expect(householdWatchlist([watched, pending, empty, partnerPending])).toEqual(
-      [pending, partnerPending],
-    )
+    expect(
+      householdWatchlist([watched, pending, empty, partnerPending]),
+    ).toEqual([pending, partnerPending])
   })
 })
 

@@ -417,7 +417,10 @@ function useReorderWatchlistMutation(
       await queryClient.cancelQueries({ queryKey })
       const previous = queryClient.getQueryData<CatalogItem[]>(queryKey)
       if (previous) {
-        queryClient.setQueryData(queryKey, applyPendingOrder(previous, orderedTitleIds))
+        queryClient.setQueryData(
+          queryKey,
+          applyPendingOrder(previous, orderedTitleIds),
+        )
       }
       return { previous }
     },

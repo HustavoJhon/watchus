@@ -6,7 +6,10 @@ import type { CatalogItem } from '@/lib/catalog'
  * created first). Titles leaving the watchlist keep a (compacted) position
  * behind the pending block, so the relative order is preserved.
  */
-export function compareWatchlistPosition(a: CatalogItem, b: CatalogItem): number {
+export function compareWatchlistPosition(
+  a: CatalogItem,
+  b: CatalogItem,
+): number {
   const pa = a.watchlistPosition
   const pb = b.watchlistPosition
   if (pa != null && pb != null) return pa - pb
@@ -30,7 +33,9 @@ export function attachWatchlistOrder(
   items: CatalogItem[],
   order: Array<{ title_id: string; position: number }>,
 ): CatalogItem[] {
-  const positionByTitle = new Map(order.map((row) => [row.title_id, row.position]))
+  const positionByTitle = new Map(
+    order.map((row) => [row.title_id, row.position]),
+  )
   const withPosition = items.map((item) => ({
     ...item,
     watchlistPosition: positionByTitle.get(item.title.id) ?? null,

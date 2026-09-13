@@ -49,9 +49,8 @@ function WatchlistPage() {
   const auth = useAuth()
   const catalogQuery = useCatalog(auth.user)
   const mutations = useCatalogMutations(auth.user)
-  const [typeFilter, setTypeFilter] = useState<(typeof FILTERS)[number]['value']>(
-    'all',
-  )
+  const [typeFilter, setTypeFilter] =
+    useState<(typeof FILTERS)[number]['value']>('all')
 
   const allPending = useMemo(
     () => householdWatchlist(catalogQuery.data ?? []),
@@ -170,7 +169,10 @@ function WatchlistPage() {
           collisionDetection={closestCenter}
           onDragEnd={onDragEnd}
         >
-          <SortableContext items={items.map((item) => item.title.id)} strategy={rectSortingStrategy}>
+          <SortableContext
+            items={items.map((item) => item.title.id)}
+            strategy={rectSortingStrategy}
+          >
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {items.map((item, index) => (
                 <SortableTitleCard

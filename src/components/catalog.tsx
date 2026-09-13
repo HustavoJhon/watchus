@@ -73,7 +73,9 @@ export function TitleCard({
           <div className="absolute top-2 left-2 flex gap-1">
             <Badge>{mediaTypeLabel(title.media_type)}</Badge>
             {item.ownFavorite ? <Badge variant="default">★</Badge> : null}
-            {position != null ? <Badge variant="outline">#{position}</Badge> : null}
+            {position != null ? (
+              <Badge variant="outline">#{position}</Badge>
+            ) : null}
           </div>
           {byBoth ? (
             <div className="absolute right-2 bottom-2">

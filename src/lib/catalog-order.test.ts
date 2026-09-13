@@ -24,15 +24,19 @@ describe('compareWatchlistPosition', () => {
     const b = makeItem({ watchlistPosition: null })
     const sorted = [a, b].sort(compareWatchlistPosition)
     expect(sorted[0].title.id).toBe(
-      [a, b].sort((x, y) => y.title.created_at.localeCompare(x.title.created_at))[0]
-        .title.id,
+      [a, b].sort((x, y) =>
+        y.title.created_at.localeCompare(x.title.created_at),
+      )[0].title.id,
     )
   })
 })
 
 describe('sortByWatchlistPosition', () => {
   it('does not mutate the input array', () => {
-    const items = [makeItem({ watchlistPosition: 2 }), makeItem({ watchlistPosition: 1 })]
+    const items = [
+      makeItem({ watchlistPosition: 2 }),
+      makeItem({ watchlistPosition: 1 }),
+    ]
     const original = [...items]
     sortByWatchlistPosition(items)
     expect(items).toEqual(original)
@@ -97,7 +101,12 @@ describe('reorderWithSubset', () => {
 
   it('reorders within the visible subset and keeps hidden items in place', () => {
     // Displayed: ['a', 'c']. Move a after c: it lands right after c.
-    expect(reorderWithSubset(full, ['a', 'c'], 0, 1)).toEqual(['b', 'c', 'a', 'd'])
+    expect(reorderWithSubset(full, ['a', 'c'], 0, 1)).toEqual([
+      'b',
+      'c',
+      'a',
+      'd',
+    ])
   })
 
   it('moves an item to the first visible slot', () => {
