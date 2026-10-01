@@ -7,75 +7,59 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * WatchUs design system — Gruvbox (dark background).
+ *
+ * Base is dark0/dark1 Gruvbox; surfaces differentiate with dark1/dark2 and
+ * text uses light1/light2. Color is used semantically, never decoratively:
+ *   - red:      primary actions / important elements
+ *   - yellow:   pending watchlist + ratings
+ *   - aqua/blue: currently watching + focus rings
+ *   - green:    watched / completed
+ *   - purple:   favorites (special elements)
+ *   - orange:   secondary accent (unused until needed)
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --background: #282828;
+  --foreground: #ebdbb2;
+  --card: #3c3836;
+  --card-foreground: #ebdbb2;
+  --popover: #3c3836;
+  --popover-foreground: #ebdbb2;
+  --primary: #cc241d;
+  --primary-foreground: #fbf1c7;
+  --secondary: #504945;
+  --secondary-foreground: #ebdbb2;
+  --muted: #504945;
+  --muted-foreground: #a89984;
+  --accent: #504945;
+  --accent-foreground: #ebdbb2;
+  --destructive: #fb4934;
+  --destructive-foreground: #fbf1c7;
+  --border: #504945;
+  --input: #504945;
+  --ring: #83a598;
   --radius: 0.625rem;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  --chart-1: #d3869b;
+  --chart-2: #83a598;
+  --chart-3: #fe8019;
+  --chart-4: #b8bb26;
+  --chart-5: #fabd2f;
+  --sidebar: #3c3836;
+  --sidebar-foreground: #ebdbb2;
+  --sidebar-primary: #cc241d;
+  --sidebar-primary-foreground: #fbf1c7;
+  --sidebar-accent: #504945;
+  --sidebar-accent-foreground: #ebdbb2;
+  --sidebar-border: #504945;
+  --sidebar-ring: #83a598;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Semantic status colors (Gruvbox accents). */
+  --status-watchlist: #fabd2f;
+  --status-watching: #83a598;
+  --status-watched: #b8bb26;
+  --status-favorite: #d3869b;
+  --status-rating: #fabd2f;
 }
 
 @theme inline {
@@ -117,19 +101,63 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Semantic state utilities: bg-watchlist, text-watching, ring-favorite, … */
+  --color-watchlist: var(--status-watchlist);
+  --color-watching: var(--status-watching);
+  --color-watched: var(--status-watched);
+  --color-favorite: var(--status-favorite);
+  --color-rating: var(--status-rating);
+}
+
+.dark {
+  --background: #282828;
+  --foreground: #ebdbb2;
+  --card: #3c3836;
+  --card-foreground: #ebdbb2;
+  --popover: #3c3836;
+  --popover-foreground: #ebdbb2;
+  --primary: #cc241d;
+  --primary-foreground: #fbf1c7;
+  --secondary: #504945;
+  --secondary-foreground: #ebdbb2;
+  --muted: #504945;
+  --muted-foreground: #a89984;
+  --accent: #504945;
+  --accent-foreground: #ebdbb2;
+  --destructive: #fb4934;
+  --destructive-foreground: #fbf1c7;
+  --border: #504945;
+  --input: #504945;
+  --ring: #83a598;
+  --chart-1: #d3869b;
+  --chart-2: #83a598;
+  --chart-3: #fe8019;
+  --chart-4: #b8bb26;
+  --chart-5: #fabd2f;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply antialiased bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* Respect users who prefer reduced motion: strip animations and transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
