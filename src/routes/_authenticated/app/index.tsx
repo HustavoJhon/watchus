@@ -103,7 +103,7 @@ function DashboardPage() {
     <div className="flex flex-1 flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-bold">
+          <h1 className="text-xl font-bold">
             Hola, {me?.display_name ?? profile?.display_name ?? '—'}
           </h1>
           <p className="text-sm text-muted-foreground">

@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { mediaTypeLabel } from '@/components/catalog'
+import { toast } from '@/lib/toast'
 import { posterUrl } from '@/lib/tmdb/config'
 import { tmdbUserMessage } from '@/lib/tmdb/errors'
 import type { TitleCandidate } from '@/lib/tmdb/mapper'
@@ -82,6 +84,10 @@ function SearchPage() {
   function addResult(candidate: TitleCandidate) {
     mutations.add.mutate(candidate, {
       onSuccess: (title) => {
+        toast({
+          title: 'Añadido al catálogo',
+          description: candidate.title,
+        })
         void navigate({
           to: '/app/title/$titleId',
           params: { titleId: title.id },
@@ -91,8 +97,16 @@ function SearchPage() {
     })
   }
 
+  const resultsCount = results.length > 0 ? `${results.length} resultados` : ''
+
   return (
     <div className="flex flex-1 flex-col gap-4">
+      <h1 className="sr-only">Búsqueda en TMDB</h1>
+      {resultsCount ? (
+        <p role="status" className="sr-only">
+          {resultsCount}
+        </p>
+      ) : null}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -179,8 +193,8 @@ function SearchPage() {
                       </div>
                     )}
                     <div className="absolute top-2 left-2">
-                      <Badge>
-                        {candidate.mediaType === 'tv' ? 'Serie' : 'Película'}
+                      <Badge variant="secondary">
+                        {mediaTypeLabel(candidate.mediaType)}
                       </Badge>
                     </div>
                   </div>

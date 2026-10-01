@@ -76,7 +76,7 @@ function StatsPage() {
     <div className="flex flex-1 flex-col gap-4">
       <header className="flex items-center gap-2">
         <BarChart3Icon className="size-5 text-muted-foreground" />
-        <h1 className="text-base font-semibold">Estadísticas</h1>
+        <h1 className="text-xl font-bold">Estadísticas</h1>
       </header>
 
       {stats.users.length > 0 ? (

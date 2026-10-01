@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useCatalogMutations } from '@/lib/queries'
 import { useAuth } from '@/lib/auth'
+import { toast } from '@/lib/toast'
 import type { CatalogItem } from '@/lib/catalog'
 
 const partnerHoldsTitle = (item: CatalogItem): boolean =>
@@ -46,6 +47,12 @@ export function RemoveTitleDialog({
     mutations.remove.mutate(item.title.id, {
       onSuccess: () => {
         setOpen(false)
+        toast({
+          title: 'Eliminado del catálogo',
+          description: partnerHolds
+            ? 'Solo desapareció de tu perfil; tu pareja aún lo conserva.'
+            : `«${item.title.title}» ya no está en el catálogo.`,
+        })
         onRemoved?.()
       },
     })

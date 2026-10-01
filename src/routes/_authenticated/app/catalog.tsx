@@ -146,6 +146,7 @@ function CatalogPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
+      <h1 className="sr-only">Catálogo</h1>
       <form
         onSubmit={(event) => {
           event.preventDefault()
@@ -232,7 +233,7 @@ function CatalogPage() {
         ) : null}
       </div>
 
-      <span className="text-xs text-muted-foreground">
+      <span className="text-xs text-muted-foreground" role="status">
         {countLabelOf(filtered, filters)}
       </span>
 
@@ -290,13 +291,7 @@ function CatalogPage() {
           <div className="flex gap-2">
             {items.length === 0 ? (
               <Button asChild className="mt-2">
-                <Link
-                  to="/app/search"
-                  search={{ q: '' }}
-                  onClick={() =>
-                    void navigate({ to: '/app/search', search: { q: '' } })
-                  }
-                >
+                <Link to="/app/search" search={{ q: '' }}>
                   Ir a Búsqueda
                   <ArrowRightIcon />
                 </Link>

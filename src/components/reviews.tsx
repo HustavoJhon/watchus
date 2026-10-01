@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/lib/auth'
+import { toast } from '@/lib/toast'
 import {
   useHouseholdContext,
   useReviewMutations,
@@ -69,8 +70,17 @@ export function ReviewsSection({ titleId }: { titleId: string }) {
             ? 'No se pudo guardar la reseña.'
             : null
         }
-        onSave={(content) => mutations.save.mutate({ titleId, content })}
-        onDelete={() => mutations.remove.mutate(titleId)}
+        onSave={(content) =>
+          mutations.save.mutate(
+            { titleId, content },
+            { onSuccess: () => toast({ title: 'Reseña guardada' }) },
+          )
+        }
+        onDelete={() =>
+          mutations.remove.mutate(titleId, {
+            onSuccess: () => toast({ title: 'Reseña eliminada' }),
+          })
+        }
       />
 
       {partnerReview ? (
