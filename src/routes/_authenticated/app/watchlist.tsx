@@ -32,6 +32,7 @@ import {
 import { useAuth } from '@/lib/auth'
 import { reorderWithSubset } from '@/lib/catalog-order'
 import { useCatalog, useCatalogMutations } from '@/lib/queries'
+import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { householdWatchlist, watchlistCountLabel } from '@/lib/watchlist'
 
@@ -76,7 +77,9 @@ function WatchlistPage() {
       from,
       to,
     )
-    mutations.reorder.mutate(orderedIds)
+    mutations.reorder.mutate(orderedIds, {
+      onSuccess: () => toast({ title: 'Orden actualizado' }),
+    })
   }
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -97,7 +100,7 @@ function WatchlistPage() {
   return (
     <div className="flex flex-1 flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-base font-semibold">Pendientes del hogar</h1>
+        <h1 className="text-xl font-bold">Pendientes del hogar</h1>
         <span className="text-xs text-muted-foreground">
           {watchlistCountLabel(allPending.length)}
         </span>
@@ -178,6 +181,7 @@ function WatchlistPage() {
                 <SortableTitleCard
                   key={item.title.id}
                   item={item}
+                  featured={index === 0}
                   canMoveUp={index > 0}
                   canMoveDown={index < items.length - 1}
                   onMove={onMove}
@@ -193,11 +197,14 @@ function WatchlistPage() {
 
 function SortableTitleCard({
   item,
+  featured,
   canMoveUp,
   canMoveDown,
   onMove,
 }: {
   item: CatalogItem
+  /** Highlights the first pending item («lo próximo por ver»). */
+  featured?: boolean
   canMoveUp: boolean
   canMoveDown: boolean
   onMove: (titleId: string, delta: -1 | 1) => void
@@ -220,7 +227,11 @@ function SortableTitleCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={cn(isDragging && 'z-10 opacity-90')}
+      className={cn(
+        'rounded-lg',
+        isDragging && 'z-10 opacity-90',
+        featured && 'ring-1 ring-favorite/50',
+      )}
     >
       <TitleCard
         item={item}
@@ -301,11 +312,16 @@ function WatchlistControls({ item }: { item: CatalogItem }) {
         <Button
           type="button"
           size="icon-sm"
-          variant={item.ownFavorite ? 'default' : 'outline'}
+          variant="outline"
           disabled={busy}
+          aria-pressed={item.ownFavorite}
           aria-label={
             item.ownFavorite ? 'Quitar de favoritos' : 'Marcar favorito'
           }
+          className={cn(
+            item.ownFavorite &&
+              'border-favorite/40 bg-favorite/15 text-favorite hover:bg-favorite/20 hover:text-favorite',
+          )}
           onClick={() =>
             mutations.favorite.mutate({
               titleId: item.title.id,
