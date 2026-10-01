@@ -5,9 +5,15 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { RatingPicker, StatusPicker, StateBadge } from '@/components/catalog'
+import {
+  RatingPicker,
+  StatusPicker,
+  StateBadge,
+  mediaTypeLabel,
+} from '@/components/catalog'
 import { RemoveTitleDialog } from '@/components/remove-title-dialog'
 import { ReviewsSection } from '@/components/reviews'
+import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { useCatalog, useCatalogMutations } from '@/lib/queries'
 import type { WatchStatus } from '@/lib/catalog'
@@ -134,7 +140,9 @@ function TitleDetailPage() {
               ) : null}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <Badge>{mediaType === 'tv' ? 'Serie' : 'Película'}</Badge>
+              <Badge variant="secondary">
+                {mediaTypeLabel(mediaType ?? '')}
+              </Badge>
               {item.title.genres.map((genre) => (
                 <Badge key={genre} variant="outline">
                   {genre}
@@ -222,12 +230,16 @@ function TitleDetailPage() {
               <Button
                 type="button"
                 size="sm"
-                variant={item.ownFavorite ? 'default' : 'outline'}
+                variant="outline"
                 disabled={busy}
                 aria-pressed={item.ownFavorite}
                 aria-label={
                   item.ownFavorite ? 'Quitar de favoritos' : 'Marcar favorito'
                 }
+                className={cn(
+                  item.ownFavorite &&
+                    'border-favorite/40 bg-favorite/15 text-favorite hover:bg-favorite/20 hover:text-favorite',
+                )}
                 onClick={() =>
                   mutations.favorite.mutate({
                     titleId: localTitleId,

@@ -20,12 +20,18 @@ export function statusLabel(status: WatchStatus | null): string | null {
   return status ? statusLabels[status] : null
 }
 
-export function StateBadge({ status }: { status: WatchStatus | null }) {
-  if (!status) return null
-  return <Badge variant="secondary">{statusLabels[status]}</Badge>
+const stateStyles: Record<WatchStatus, string> = {
+  watchlist: 'bg-watchlist/15 text-watchlist',
+  watching: 'bg-watching/15 text-watching',
+  watched: 'bg-watched/15 text-watched',
 }
 
-function mediaTypeLabel(mediaType: string): string {
+export function StateBadge({ status }: { status: WatchStatus | null }) {
+  if (!status) return null
+  return <Badge className={stateStyles[status]}>{statusLabels[status]}</Badge>
+}
+
+export function mediaTypeLabel(mediaType: string): string {
   return mediaType === 'tv' ? 'Serie' : 'Película'
 }
 
@@ -71,15 +77,21 @@ export function TitleCard({
             </div>
           )}
           <div className="absolute top-2 left-2 flex gap-1">
-            <Badge>{mediaTypeLabel(title.media_type)}</Badge>
-            {item.ownFavorite ? <Badge variant="default">★</Badge> : null}
+            <Badge variant="secondary">
+              {mediaTypeLabel(title.media_type)}
+            </Badge>
+            {item.ownFavorite ? (
+              <Badge className="bg-favorite text-background">★</Badge>
+            ) : null}
             {position != null ? (
-              <Badge variant="outline">#{position}</Badge>
+              <Badge variant="secondary">#{position}</Badge>
             ) : null}
           </div>
           {byBoth ? (
             <div className="absolute right-2 bottom-2">
-              <Badge>Visto por ambos ♥</Badge>
+              <Badge className="bg-watched/20 text-watched backdrop-blur-xs">
+                Visto por ambos ♥
+              </Badge>
             </div>
           ) : null}
         </div>
@@ -89,7 +101,7 @@ export function TitleCard({
             <span>{title.year ?? '—'}</span>
             {item.ownRating ? (
               <span className="inline-flex items-center gap-0.5">
-                <StarIcon className="size-3 fill-amber-400 text-amber-400" />
+                <StarIcon className="size-3 fill-rating text-rating" />
                 {item.ownRating.toFixed(1)}
               </span>
             ) : null}
@@ -127,9 +139,17 @@ export function StatusPicker({
           <Button
             key={option.label}
             type="button"
-            variant={active ? 'default' : 'outline'}
+            variant="ghost"
             size="sm"
             disabled={disabled}
+            aria-pressed={active}
+            className={
+              active
+                ? option.value === null
+                  ? 'bg-secondary text-secondary-foreground'
+                  : stateStyles[option.value]
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }
             onClick={() => onChange(option.value)}
           >
             {option.label}
@@ -152,7 +172,7 @@ export function RatingPicker({
   disabled?: boolean
 }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-0.5">
       {RATING_STEPS.map((step) => {
         const isFull = rating != null && rating >= step
         const isHalf = rating != null && rating === step - 0.5
@@ -165,22 +185,22 @@ export function RatingPicker({
               onClick={() =>
                 onChange(rating === step - 0.5 ? null : step - 0.5)
               }
-              className="absolute inset-0 left-0 z-10 w-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50"
+              className="absolute inset-y-0 left-0 z-10 w-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50"
             />
             <button
               type="button"
               aria-label={`Puntuar ${step}`}
               disabled={disabled}
               onClick={() => onChange(rating === step ? null : step)}
-              className="absolute inset-0 right-0 z-10 w-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50"
+              className="absolute inset-y-0 right-0 z-10 w-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50"
             />
             <StarIcon
               className={cn(
                 'size-5 pointer-events-none',
                 isFull
-                  ? 'fill-amber-400 text-amber-400'
+                  ? 'fill-rating text-rating'
                   : isHalf
-                    ? 'fill-amber-400/50 text-amber-400'
+                    ? 'fill-rating/40 text-rating'
                     : 'text-muted-foreground/40',
               )}
             />

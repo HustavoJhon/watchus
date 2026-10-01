@@ -15,6 +15,7 @@ import {
 import { useAuth } from '@/lib/auth'
 import { generateInvitationCode } from '@/lib/auth/local'
 import { toUserMessage } from '@/lib/auth/errors'
+import { toast } from '@/lib/toast'
 import { queryKeys, useHouseholdContext } from '@/lib/queries'
 
 export const Route = createFileRoute('/_authenticated/app/hogar')({
@@ -60,6 +61,9 @@ function HouseholdPage() {
   async function copy(text: string, kind: 'code' | 'link') {
     await navigator.clipboard.writeText(text)
     setCopied(kind)
+    if (kind === 'link') {
+      toast({ title: 'Enlace copiado', description: 'Envíalo a tu pareja.' })
+    }
     window.setTimeout(() => setCopied(null), 2000)
   }
 
@@ -76,6 +80,7 @@ function HouseholdPage() {
         // Show the fresh code immediately instead of waiting for the refetch.
         queryClient.setQueryData(queryKeys.household(householdId), data)
       }
+      toast({ title: 'Código regenerado' })
     } catch (err) {
       setError(toUserMessage((err as { message?: string }).message))
     } finally {
@@ -85,6 +90,7 @@ function HouseholdPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
+      <h1 className="sr-only">Hogar</h1>
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <div>
@@ -95,7 +101,10 @@ function HouseholdPage() {
                 : 'Te falta tu pareja. Comparte el código para unirse.'}
             </CardDescription>
           </div>
-          <Badge variant={secondMember ? 'default' : 'secondary'}>
+          <Badge
+            variant="secondary"
+            className={secondMember ? 'bg-watched/15 text-watched' : undefined}
+          >
             {secondMember ? 'Completo' : 'Te falta 1'}
           </Badge>
         </CardHeader>

@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth'
 import { useCatalog, useHouseholdContext } from '@/lib/queries'
-import { statusLabel } from '@/components/catalog'
+import { mediaTypeLabel, statusLabel } from '@/components/catalog'
 import { getWatchTonightCandidates, pickWatchTonight } from '@/lib/watch'
 import { posterUrl } from '@/lib/tmdb/config'
 
@@ -153,8 +153,8 @@ export function WatchTonight() {
             ) : null}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <Badge>
-              {selected.title.media_type === 'tv' ? 'Serie' : 'Película'}
+            <Badge variant="secondary">
+              {mediaTypeLabel(selected.title.media_type)}
             </Badge>
             {statuses.map((item) => (
               <Badge key={item.userId} variant="outline">
