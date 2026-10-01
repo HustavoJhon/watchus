@@ -1,6 +1,7 @@
 import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Toaster } from '@/components/ui/toast'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -14,6 +15,7 @@ function RootComponent() {
       <main className="flex-1">
         <Outlet />
       </main>
+      <Toaster />
     </div>
   )
 }
