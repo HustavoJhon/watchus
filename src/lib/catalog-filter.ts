@@ -4,8 +4,11 @@ import type { WatchStatus } from '@/lib/catalog'
 /** Media-type filter. */
 export type MediaTypeFilter = 'all' | 'movie' | 'tv'
 
-/** Watch-status filter. */
-export type StatusFilter = 'all' | WatchStatus
+/**
+ * Watch-status filter. `none` means the title has no state at all yet
+ * (added to the catalog but nothing decided); it matches ownStatus === null.
+ */
+export type StatusFilter = 'all' | 'none' | WatchStatus
 
 /** Favorite filter. */
 export type FavoriteFilter = 'all' | 'favorites'
@@ -47,8 +50,12 @@ export function matchesCatalogFilters(
   if (filters.type !== 'all' && item.title.media_type !== filters.type) {
     return false
   }
-  if (filters.status !== 'all' && item.ownStatus !== filters.status) {
-    return false
+  if (filters.status !== 'all') {
+    if (filters.status === 'none') {
+      if (item.ownStatus !== null) return false
+    } else if (item.ownStatus !== filters.status) {
+      return false
+    }
   }
   if (filters.favorites === 'favorites' && !item.ownFavorite) {
     return false
@@ -102,19 +109,21 @@ export function countLabelOf(
 
   if (filters.status !== 'all') {
     const statusWord =
-      filters.status === 'watching'
-        ? 'en curso'
-        : filters.status === 'watched'
-          ? feminine
-            ? count === 1
-              ? 'vista'
-              : 'vistas'
+      filters.status === 'none'
+        ? 'sin estado'
+        : filters.status === 'watching'
+          ? 'en curso'
+          : filters.status === 'watched'
+            ? feminine
+              ? count === 1
+                ? 'vista'
+                : 'vistas'
+              : count === 1
+                ? 'visto'
+                : 'vistos'
             : count === 1
-              ? 'visto'
-              : 'vistos'
-          : count === 1
-            ? 'pendiente'
-            : 'pendientes'
+              ? 'pendiente'
+              : 'pendientes'
     parts.push(statusWord)
   }
 
