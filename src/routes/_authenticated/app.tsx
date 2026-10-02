@@ -4,14 +4,7 @@ import {
   Outlet,
   useLocation,
 } from '@tanstack/react-router'
-import {
-  SearchIcon,
-  HomeIcon,
-  ListVideoIcon,
-  UsersIcon,
-  BarChart3Icon,
-  LibraryIcon,
-} from 'lucide-react'
+import { SearchIcon, HomeIcon, LibraryIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/app')({
@@ -36,24 +29,6 @@ const tabs = [
     label: 'Búsqueda',
     icon: SearchIcon,
     active: (pathname: string) => pathname.startsWith('/app/search'),
-  },
-  {
-    to: '/app/watchlist',
-    label: 'Pendientes',
-    icon: ListVideoIcon,
-    active: (pathname: string) => pathname.startsWith('/app/watchlist'),
-  },
-  {
-    to: '/app/stats',
-    label: 'Estadísticas',
-    icon: BarChart3Icon,
-    active: (pathname: string) => pathname.startsWith('/app/stats'),
-  },
-  {
-    to: '/app/hogar',
-    label: 'Hogar',
-    icon: UsersIcon,
-    active: (pathname: string) => pathname.startsWith('/app/hogar'),
   },
 ]
 
@@ -90,7 +65,7 @@ function AppLayout() {
 
       <nav
         aria-label="Navegación principal"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-border bg-background/90 backdrop-blur-md md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-border bg-background/90 backdrop-blur-md md:hidden"
       >
         {tabs.map((tab) => {
           const active = tab.active(pathname)

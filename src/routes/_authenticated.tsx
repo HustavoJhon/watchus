@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
-import { LogOutIcon } from 'lucide-react'
+import { LogOutIcon, UsersIcon } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -66,6 +66,12 @@ function AuthenticatedLayout() {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>{profile.display_name}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/app/hogar">
+                    <UsersIcon />
+                    Hogar
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => void signOut()}
