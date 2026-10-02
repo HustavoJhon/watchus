@@ -107,6 +107,50 @@ describe('matchesCatalogFilters', () => {
     expect(out.map((i) => i.ownStatus)).toEqual(['watched', 'watched'])
   })
 
+  it('filters by "sin estado" (ownStatus null)', () => {
+    const withNone = [
+      ...fixture,
+      item({
+        title: title({
+          id: 'n1',
+          title: 'Nuevo sin estado',
+          media_type: 'movie',
+          tmdb_id: 100,
+        }),
+      }),
+    ]
+    const out = filterCatalog(withNone, { ...allFilters, status: 'none' })
+    expect(out.map((i) => i.title.title)).toEqual(['Nuevo sin estado'])
+  })
+
+  it('combines "sin estado" with a media type', () => {
+    const withNone = [
+      ...fixture,
+      item({
+        title: title({
+          id: 'n1',
+          title: 'Nuevo sin estado',
+          media_type: 'movie',
+          tmdb_id: 100,
+        }),
+      }),
+      item({
+        title: title({
+          id: 'n2',
+          title: 'Serie sin estado',
+          media_type: 'tv',
+          tmdb_id: 101,
+        }),
+      }),
+    ]
+    const out = filterCatalog(withNone, {
+      ...allFilters,
+      type: 'movie',
+      status: 'none',
+    })
+    expect(out.map((i) => i.title.title)).toEqual(['Nuevo sin estado'])
+  })
+
   it('filters by favorites', () => {
     const out = filterCatalog(fixture, {
       ...allFilters,
@@ -157,6 +201,7 @@ describe('hasActiveFilters', () => {
     expect(hasActiveFilters({ ...DEFAULT_FILTERS, status: 'watched' })).toBe(
       true,
     )
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, status: 'none' })).toBe(true)
     expect(
       hasActiveFilters({ ...DEFAULT_FILTERS, favorites: 'favorites' }),
     ).toBe(true)
@@ -286,5 +331,28 @@ describe('countLabelOf', () => {
         },
       ),
     ).toBe('1 serie en curso')
+  })
+
+  it('labels titles without state', () => {
+    const withNone = [
+      item({
+        title: title({
+          id: 'n1',
+          title: 'Nuevo sin estado',
+          media_type: 'movie',
+          tmdb_id: 100,
+        }),
+      }),
+    ]
+    expect(
+      countLabelOf(
+        filterCatalog(withNone, {
+          ...allFilters,
+          type: 'movie',
+          status: 'none',
+        }),
+        { ...allFilters, type: 'movie', status: 'none' },
+      ),
+    ).toBe('1 película sin estado')
   })
 })
