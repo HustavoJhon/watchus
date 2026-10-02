@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  computeCatalogProgress,
   computeCatalogStats,
   computeRatingDistribution,
   computeStats,
   computeTopGenres,
   computeUserStats,
+  countByHouseholdStatus,
+  countByMediaType,
+  householdStatusOf,
+  monthKeyOf,
+  watchedActivityByMonth,
 } from '@/lib/stats'
 import { makeItem, makeReview, makeTitle } from '@/lib/testing'
 
@@ -201,5 +207,134 @@ describe('computeStats', () => {
       { value: 3.5, count: 1 },
       { value: 4, count: 1 },
     ])
+  })
+
+  it('keeps canonical household status apart from per-user counts', () => {
+    const items = [
+      makeItem({ ownStatus: 'watchlist', partnerStatus: 'watched' }),
+    ]
+    const stats = computeStats(items, [], members, 'u1')
+    expect(stats.catalog.watchlist).toBe(1)
+    expect(stats.catalog.watched).toBe(0)
+    expect(stats.householdStatus.watched).toBe(1)
+    expect(stats.householdStatus.watchlist).toBe(0)
+  })
+})
+
+describe('householdStatusOf', () => {
+  it('prioritises watched over watching over watchlist', () => {
+    expect(
+      householdStatusOf(
+        makeItem({ ownStatus: 'watchlist', partnerStatus: 'watched' }),
+      ),
+    ).toBe('watched')
+    expect(
+      householdStatusOf(
+        makeItem({ ownStatus: 'watching', partnerStatus: 'watchlist' }),
+      ),
+    ).toBe('watching')
+    expect(householdStatusOf(makeItem({ ownStatus: 'watchlist' }))).toBe(
+      'watchlist',
+    )
+    expect(householdStatusOf(makeItem())).toBe('none')
+  })
+})
+
+describe('countByHouseholdStatus', () => {
+  it('never double counts a title with two different member states', () => {
+    const items = [
+      makeItem({ ownStatus: 'watched', partnerStatus: 'watchlist' }),
+      makeItem({ ownStatus: 'watching' }),
+      makeItem({ ownStatus: 'watchlist', partnerStatus: 'watching' }),
+      makeItem({ partnerStatus: 'watchlist' }),
+      makeItem(),
+    ]
+    expect(countByHouseholdStatus(items)).toEqual({
+      watchlist: 1,
+      watching: 2,
+      watched: 1,
+      none: 1,
+    })
+  })
+
+  it('returns zeros for an empty catalog', () => {
+    expect(countByHouseholdStatus([])).toEqual({
+      watchlist: 0,
+      watching: 0,
+      watched: 0,
+      none: 0,
+    })
+  })
+})
+
+describe('countByMediaType', () => {
+  it('counts each title once by its own media type', () => {
+    const items = [
+      makeItem({ title: makeTitle() }),
+      makeItem({ title: makeTitle({ media_type: 'tv' }) }),
+      makeItem({ title: makeTitle() }),
+    ]
+    expect(countByMediaType(items)).toEqual({ movies: 2, series: 1 })
+  })
+})
+
+describe('computeCatalogProgress', () => {
+  it('derives progress from canonical status and watched-by-both', () => {
+    const items = [
+      makeItem({ ownStatus: 'watched', partnerStatus: 'watched' }),
+      makeItem({ partnerStatus: 'watched' }),
+      makeItem({ ownStatus: 'watchlist' }),
+      makeItem(),
+    ]
+    expect(computeCatalogProgress(items)).toEqual({
+      total: 4,
+      watched: 2,
+      watching: 0,
+      watchlist: 1,
+      active: 3,
+      watchedByBoth: 1,
+    })
+  })
+})
+
+describe('monthKeyOf', () => {
+  it('formats the UTC year-month key', () => {
+    expect(monthKeyOf(new Date('2026-03-05T00:00:00Z'))).toBe('2026-03')
+    expect(monthKeyOf(new Date('2026-12-31T23:59:00Z'))).toBe('2026-12')
+  })
+})
+
+describe('watchedActivityByMonth', () => {
+  it('buckets own and partner events and zero-fills empty months', () => {
+    const items = [
+      makeItem({ ownWatchedAt: '2026-01-10T00:00:00Z' }),
+      makeItem({
+        ownWatchedAt: '2026-03-01T00:00:00Z',
+        partnerWatchedAt: '2026-03-15T00:00:00Z',
+      }),
+    ]
+    const activity = watchedActivityByMonth(
+      items,
+      new Date('2026-03-31T00:00:00Z'),
+    )
+    expect(activity).toEqual([
+      { key: '2026-01', label: 'ene 2026', count: 1 },
+      { key: '2026-02', label: 'feb 2026', count: 0 },
+      { key: '2026-03', label: 'mar 2026', count: 2 },
+    ])
+  })
+
+  it('returns an empty list when nobody watched anything', () => {
+    expect(watchedActivityByMonth([makeItem(), makeItem()])).toEqual([])
+  })
+
+  it('caps an old spike to a bounded recent window', () => {
+    const items = [makeItem({ ownWatchedAt: '2020-01-01T00:00:00Z' })]
+    const activity = watchedActivityByMonth(
+      items,
+      new Date('2026-03-31T00:00:00Z'),
+    )
+    expect(activity.length).toBeLessThanOrEqual(24)
+    expect(activity[activity.length - 1].key).toBe('2026-03')
   })
 })
