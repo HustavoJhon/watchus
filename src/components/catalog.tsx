@@ -59,7 +59,7 @@ export function TitleCard({
         to="/app/title/$titleId"
         params={{ titleId: title.id }}
         search={{ tmdbId: title.tmdb_id, mediaType: title.media_type }}
-        className="flex flex-col"
+        className="flex flex-1 flex-col"
       >
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           {poster ? (
@@ -95,9 +95,9 @@ export function TitleCard({
             </div>
           ) : null}
         </div>
-        <div className="flex flex-1 flex-col gap-1 p-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1 p-3">
           <p className="line-clamp-1 text-sm font-semibold">{title.title}</p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
             <span>{title.year ?? '—'}</span>
             {item.ownRating ? (
               <span className="inline-flex items-center gap-0.5">
@@ -166,13 +166,16 @@ export function RatingPicker({
   rating,
   onChange,
   disabled,
+  compact = false,
 }: {
   rating: number | null
   onChange: (rating: number | null) => void
   disabled?: boolean
+  /** Smaller stars to fit narrow card footers. */
+  compact?: boolean
 }) {
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex min-w-0 items-center gap-0.5">
       {RATING_STEPS.map((step) => {
         const isFull = rating != null && rating >= step
         const isHalf = rating != null && rating === step - 0.5
@@ -196,7 +199,8 @@ export function RatingPicker({
             />
             <StarIcon
               className={cn(
-                'size-5 pointer-events-none',
+                compact ? 'size-4' : 'size-5',
+                'pointer-events-none',
                 isFull
                   ? 'fill-rating text-rating'
                   : isHalf

@@ -175,7 +175,7 @@ function SearchPage() {
               return (
                 <article
                   key={key}
-                  className="group overflow-hidden rounded-lg border border-border bg-card transition-colors hover:bg-accent/40"
+                  className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:bg-accent/40"
                 >
                   <div className="relative aspect-[2/3] overflow-hidden bg-muted">
                     {candidate.posterPath ? (
@@ -198,11 +198,11 @@ function SearchPage() {
                       </Badge>
                     </div>
                   </div>
-                  <div className="flex flex-1 flex-col gap-1 p-3">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1 p-3">
                     <p className="line-clamp-1 text-sm font-semibold">
                       {candidate.title}
                     </p>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                       <span>{candidate.year ?? '—'}</span>
                       {candidate.genres.length > 0 ? (
                         <span className="line-clamp-1">
