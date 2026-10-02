@@ -1,10 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  GripVerticalIcon,
-  HeartIcon,
-} from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
   DndContext,
@@ -23,12 +18,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  RatingPicker,
-  StatusPicker,
-  TitleCard,
-  type CatalogItem,
-} from '@/components/catalog'
+import { TitleCard, type CatalogItem } from '@/components/catalog'
 import { useAuth } from '@/lib/auth'
 import { reorderWithSubset } from '@/lib/catalog-order'
 import { useCatalog, useCatalogMutations } from '@/lib/queries'
@@ -273,68 +263,7 @@ function SortableTitleCard({
             </button>
           </div>
         }
-        footer={<WatchlistControls item={item} />}
       />
-    </div>
-  )
-}
-
-function WatchlistControls({ item }: { item: CatalogItem }) {
-  const auth = useAuth()
-  const mutations = useCatalogMutations(auth.user)
-  const busy =
-    mutations.setStatus.isPending ||
-    mutations.clearStatus.isPending ||
-    mutations.rate.isPending ||
-    mutations.favorite.isPending
-
-  return (
-    <div className="flex flex-col gap-2">
-      <StatusPicker
-        status={item.ownStatus}
-        disabled={busy}
-        onChange={(status) => {
-          if (status === null) {
-            mutations.clearStatus.mutate(item.title.id)
-          } else {
-            mutations.setStatus.mutate({ titleId: item.title.id, status })
-          }
-        }}
-      />
-      <div className="flex items-center justify-between gap-1">
-        <RatingPicker
-          rating={item.ownRating}
-          disabled={busy}
-          compact
-          onChange={(rating) =>
-            mutations.rate.mutate({ titleId: item.title.id, rating })
-          }
-        />
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="outline"
-          disabled={busy}
-          aria-pressed={item.ownFavorite}
-          aria-label={
-            item.ownFavorite ? 'Quitar de favoritos' : 'Marcar favorito'
-          }
-          className={cn(
-            item.ownFavorite &&
-              'border-favorite/40 bg-favorite/15 text-favorite hover:bg-favorite/20 hover:text-favorite',
-          )}
-          onClick={() =>
-            mutations.favorite.mutate({
-              titleId: item.title.id,
-              favorite: !item.ownFavorite,
-            })
-          }
-        >
-          <HeartIcon
-            className={item.ownFavorite ? 'fill-current' : undefined}
-          />
-        </Button>
-      </div>
     </div>
   )
 }

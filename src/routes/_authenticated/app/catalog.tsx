@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { TitleCard } from '@/components/catalog'
-import { RemoveTitleDialog } from '@/components/remove-title-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth'
 import { useCatalog, useHouseholdContext } from '@/lib/queries'
@@ -313,11 +312,7 @@ function CatalogPage() {
           )}
         >
           {filtered.map((item) => (
-            <TitleCard
-              key={item.title.id}
-              item={item}
-              menu={<RemoveTitleDialog item={item} />}
-            />
+            <TitleCard key={item.title.id} item={item} />
           ))}
         </div>
       ) : null}
