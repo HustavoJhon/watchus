@@ -5,20 +5,25 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { TitleCard } from '@/components/catalog'
+import { CatalogFilters as CatalogFiltersBar } from '@/components/catalog-filters'
+import { ReorderBoard } from '@/components/catalog-board'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth'
-import { useCatalog, useHouseholdContext } from '@/lib/queries'
+import {
+  useCatalog,
+  useCatalogMutations,
+  useHouseholdContext,
+} from '@/lib/queries'
 import {
   DEFAULT_FILTERS,
   filterCatalog,
   hasActiveFilters,
   countLabelOf,
   type CatalogFilters,
-  type FavoriteFilter,
-  type MediaTypeFilter,
-  type StatusFilter,
 } from '@/lib/catalog-filter'
-import { cn } from '@/lib/utils'
+import { reorderWithSubset } from '@/lib/catalog-order'
+import { householdWatchlist } from '@/lib/watchlist'
+import { toast } from '@/lib/toast'
 
 export const Route = createFileRoute('/_authenticated/app/catalog')({
   validateSearch: (search: Record<string, unknown>): CatalogFilters => ({
@@ -26,7 +31,8 @@ export const Route = createFileRoute('/_authenticated/app/catalog')({
     status:
       search.status === 'watchlist' ||
       search.status === 'watching' ||
-      search.status === 'watched'
+      search.status === 'watched' ||
+      search.status === 'none'
         ? search.status
         : 'all',
     favorites: search.favorites === 'favorites' ? 'favorites' : 'all',
@@ -35,49 +41,11 @@ export const Route = createFileRoute('/_authenticated/app/catalog')({
   component: CatalogPage,
 })
 
-const typeFilters: Array<{ value: MediaTypeFilter; label: string }> = [
-  { value: 'all', label: 'Todos' },
-  { value: 'movie', label: 'Películas' },
-  { value: 'tv', label: 'Series' },
-]
-
-const statusFilters: Array<{ value: StatusFilter; label: string }> = [
-  { value: 'all', label: 'Todos' },
-  { value: 'watchlist', label: 'Pendientes' },
-  { value: 'watching', label: 'Viendo' },
-  { value: 'watched', label: 'Vistas' },
-]
-
-const favoriteFilters: Array<{ value: FavoriteFilter; label: string }> = [
-  { value: 'all', label: 'Todos' },
-  { value: 'favorites', label: 'Solo favoritos' },
-]
-
-function Chip({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean
-  label: string
-  onClick: () => void
-}) {
-  return (
-    <Button
-      type="button"
-      variant={active ? 'default' : 'outline'}
-      size="sm"
-      onClick={onClick}
-    >
-      {label}
-    </Button>
-  )
-}
-
 function CatalogPage() {
   const auth = useAuth()
   const navigate = useNavigate()
   const catalogQuery = useCatalog(auth.user)
+  const mutations = useCatalogMutations(auth.user)
   const { household, secondMember } = useHouseholdContext(auth.user)
   const searchParams = Route.useSearch()
 
@@ -88,6 +56,8 @@ function CatalogPage() {
   const items = catalogQuery.data ?? []
   const filtered = filterCatalog(items, filters)
   const hasFilters = hasActiveFilters(filters)
+  const fullPending = householdWatchlist(items)
+  const fullPendingIds = fullPending.map((item) => item.title.id)
 
   const [prevQuery, setPrevQuery] = useState(searchParams.query)
   const [input, setInput] = useState(searchParams.query)
@@ -129,9 +99,22 @@ function CatalogPage() {
     void navigate({ to: '/app/catalog', search: DEFAULT_FILTERS })
   }
 
+  function reorder(from: number, to: number) {
+    const orderedIds = reorderWithSubset(
+      fullPendingIds,
+      filtered.map((item) => item.title.id),
+      from,
+      to,
+    )
+    mutations.reorder.mutate(orderedIds, {
+      onSuccess: () => toast({ title: 'Orden actualizado' }),
+    })
+  }
+
   const emptyDescription = [] as string[]
   if (filters.type === 'movie') emptyDescription.push('películas')
   if (filters.type === 'tv') emptyDescription.push('series')
+  if (filters.status === 'none') emptyDescription.push('sin estado')
   if (filters.status === 'watchlist') emptyDescription.push('pendientes')
   if (filters.status === 'watching') emptyDescription.push('en curso')
   if (filters.status === 'watched') {
@@ -142,6 +125,8 @@ function CatalogPage() {
   if (filters.favorites === 'favorites') {
     emptyDescription.push(filters.type === 'all' ? 'favoritos' : 'favoritas')
   }
+
+  const isWatchlist = filters.status === 'watchlist'
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -184,53 +169,7 @@ function CatalogPage() {
         </Button>
       </form>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1 text-sm">
-          {typeFilters.map((option) => (
-            <Chip
-              key={option.value}
-              active={filters.type === option.value}
-              label={option.label}
-              onClick={() =>
-                setFilters({ type: option.value, query: input.trim() })
-              }
-            />
-          ))}
-          <span className="mx-1 text-muted-foreground">·</span>
-          {statusFilters.map((option) => (
-            <Chip
-              key={option.value}
-              active={filters.status === option.value}
-              label={option.label}
-              onClick={() =>
-                setFilters({ status: option.value, query: input.trim() })
-              }
-            />
-          ))}
-          <span className="mx-1 text-muted-foreground">·</span>
-          {favoriteFilters.map((option) => (
-            <Chip
-              key={option.value}
-              active={filters.favorites === option.value}
-              label={option.label}
-              onClick={() =>
-                setFilters({ favorites: option.value, query: input.trim() })
-              }
-            />
-          ))}
-        </div>
-        {hasFilters ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            onClick={resetFilters}
-          >
-            Limpiar filtros
-          </Button>
-        ) : null}
-      </div>
+      <CatalogFiltersBar filters={filters} onFiltersChange={setFilters} />
 
       <span className="text-xs text-muted-foreground" role="status">
         {countLabelOf(filtered, filters)}
@@ -285,7 +224,9 @@ function CatalogPage() {
           <p className="text-sm text-muted-foreground">
             {items.length === 0
               ? 'Busca una película o serie y añádela para tenerla a la vista.'
-              : 'Prueba cambiando los filtros.'}
+              : hasFilters
+                ? 'No encontramos títulos con estos filtros.'
+                : 'Prueba cambiando los filtros.'}
           </p>
           <div className="flex gap-2">
             {items.length === 0 ? (
@@ -304,17 +245,22 @@ function CatalogPage() {
         </Card>
       ) : null}
 
+      {filtered.length > 0 && isWatchlist ? (
+        <p className="text-xs text-muted-foreground">
+          Arrastra (o usa las flechas) para ordenar la cola compartida.
+        </p>
+      ) : null}
+
       {filtered.length > 0 ? (
-        <div
-          className={cn(
-            'grid gap-4',
-            'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
-          )}
-        >
-          {filtered.map((item) => (
-            <TitleCard key={item.title.id} item={item} />
-          ))}
-        </div>
+        isWatchlist ? (
+          <ReorderBoard items={filtered} onMove={reorder} />
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {filtered.map((item) => (
+              <TitleCard key={item.title.id} item={item} />
+            ))}
+          </div>
+        )
       ) : null}
     </div>
   )
