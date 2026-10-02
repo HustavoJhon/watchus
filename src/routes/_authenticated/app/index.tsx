@@ -3,27 +3,19 @@ import { ActivityIcon, ArrowRightIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { TitleCard, statusLabel } from '@/components/catalog'
+import { StatsOverview } from '@/components/stats-overview'
 import { WatchTonight } from '@/components/watch-tonight'
-import { statusLabel } from '@/components/catalog'
 import { useAuth } from '@/lib/auth'
 import { useAllReviews, useCatalog, useHouseholdContext } from '@/lib/queries'
 import type { CatalogItem } from '@/lib/catalog'
 import type { ReviewRow } from '@/lib/reviews'
-import { computeCatalogStats, type CatalogStats } from '@/lib/stats'
 import { formatRelativeTime } from '@/lib/format'
+import { householdWatchlist } from '@/lib/watchlist'
 
 export const Route = createFileRoute('/_authenticated/app/')({
   component: DashboardPage,
 })
-
-const statCards: Array<{ key: keyof CatalogStats; label: string }> = [
-  { key: 'total', label: 'Títulos' },
-  { key: 'watchlist', label: 'Pendientes' },
-  { key: 'watching', label: 'Viendo' },
-  { key: 'watched', label: 'Vistos' },
-  { key: 'favorites', label: 'Favoritos' },
-  { key: 'watchedByBoth', label: 'Vistos por ambos' },
-]
 
 interface ActivityEvent {
   at: string
@@ -74,6 +66,16 @@ function buildActivity(
   return events.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8)
 }
 
+const watchlistUrl = {
+  to: '/app/catalog',
+  search: {
+    type: 'all' as const,
+    status: 'watchlist' as const,
+    favorites: 'all' as const,
+    query: '',
+  },
+}
+
 function DashboardPage() {
   const auth = useAuth()
   const catalogQuery = useCatalog(auth.user)
@@ -83,7 +85,7 @@ function DashboardPage() {
   )
 
   const items = catalogQuery.data ?? []
-  const stats = computeCatalogStats(items)
+  const pending = householdWatchlist(items)
 
   const me = members.find((member) => member.id === auth.user?.id)
   const partner = members.find((member) => member.id !== auth.user?.id)
@@ -100,7 +102,7 @@ function DashboardPage() {
   )
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold">
@@ -137,16 +139,45 @@ function DashboardPage() {
 
       {!catalogQuery.isLoading && !catalogQuery.isError ? (
         <>
-          <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            {statCards.map(({ key, label }) => (
-              <Card key={key} className="p-3">
-                <p className="text-xl font-bold">{stats[key]}</p>
-                <p className="text-xs text-muted-foreground">{label}</p>
+          <WatchTonight />
+
+          <section className="flex flex-col gap-3">
+            <header className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold">Tu lista</h2>
+              <Button asChild variant="ghost" size="sm">
+                <Link {...watchlistUrl}>
+                  Ver catálogo
+                  <ArrowRightIcon />
+                </Link>
+              </Button>
+            </header>
+            {pending.length === 0 ? (
+              <Card className="bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+                Tu lista está vacía. Añade algo que quieran ver juntos.
               </Card>
-            ))}
+            ) : (
+              <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+                {pending.slice(0, 8).map((item) => (
+                  <div key={item.title.id} className="w-28 shrink-0 sm:w-32">
+                    <TitleCard item={item} />
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
-          <WatchTonight />
+          <section className="flex flex-col gap-3">
+            <h2 className="text-base font-semibold">Tus estadísticas</h2>
+            <StatsOverview
+              items={items}
+              reviews={reviewsQuery.data ?? []}
+              members={members.map((member) => ({
+                id: member.id,
+                displayName: member.display_name,
+              }))}
+              viewerId={auth.user?.id ?? ''}
+            />
+          </section>
 
           <section className="flex flex-col gap-3">
             <header className="flex items-center gap-2">
