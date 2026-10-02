@@ -238,7 +238,7 @@ function SortableTitleCard({
         position={item.watchlistPosition}
         menu={
           <div className="flex flex-col items-end gap-1">
-            <div className="flex items-center gap-1">
+            <div className="flex flex-col items-end gap-1">
               <Button
                 type="button"
                 size="icon-sm"
@@ -305,6 +305,7 @@ function WatchlistControls({ item }: { item: CatalogItem }) {
         <RatingPicker
           rating={item.ownRating}
           disabled={busy}
+          compact
           onChange={(rating) =>
             mutations.rate.mutate({ titleId: item.title.id, rating })
           }
