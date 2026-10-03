@@ -19,8 +19,10 @@ import {
 import type {
   CatalogFilters,
   MediaTypeFilter,
+  ScopeFilter,
   StatusFilter,
 } from '@/lib/catalog-filter'
+import { scopeFilterApplies } from '@/lib/catalog-filter'
 import { cn } from '@/lib/utils'
 
 const typeOptions: Array<{ value: MediaTypeFilter; label: string }> = [
@@ -37,12 +39,23 @@ const statusOptions: Array<{ value: StatusFilter; label: string }> = [
   { value: 'watched', label: 'Vistos' },
 ]
 
-/** Count of active filters (type/status/favorites), excluding the search box. */
+const scopeOptions: Array<{ value: ScopeFilter; label: string }> = [
+  { value: 'all', label: 'Ambas listas' },
+  { value: 'shared', label: 'Hogar' },
+  { value: 'personal', label: 'Solo para mí' },
+]
+
+/**
+ * Count of active filters (type/status/scope/favorites), excluding the search
+ * box. The scope only counts while it actually narrows something, i.e. when the
+ * status filter is «Pendientes».
+ */
 function activeFilterCount(filters: CatalogFilters): number {
   let count = 0
   if (filters.type !== 'all') count += 1
   if (filters.status !== 'all') count += 1
   if (filters.favorites !== 'all') count += 1
+  if (scopeFilterApplies(filters)) count += 1
   return count
 }
 
@@ -137,6 +150,11 @@ function FilterControls({
 
       <StatusMenu filters={filters} onChange={onFiltersChange} />
 
+      {/* The scope only means something while looking at pending titles. */}
+      {filters.status === 'watchlist' ? (
+        <ScopeMenu filters={filters} onChange={onFiltersChange} />
+      ) : null}
+
       <FavoriteToggle filters={filters} onChange={onFiltersChange} />
 
       {clearable ? (
@@ -146,7 +164,12 @@ function FilterControls({
           variant="ghost"
           className="text-muted-foreground"
           onClick={() => {
-            onFiltersChange({ type: 'all', status: 'all', favorites: 'all' })
+            onFiltersChange({
+              type: 'all',
+              status: 'all',
+              favorites: 'all',
+              scope: 'all',
+            })
             onDone?.()
           }}
         >
@@ -154,6 +177,50 @@ function FilterControls({
         </Button>
       ) : null}
     </>
+  )
+}
+
+/**
+ * Chooses which pending queue to show: both, the household one or the viewer's
+ * personal one.
+ */
+function ScopeMenu({
+  filters,
+  onChange,
+}: {
+  filters: CatalogFilters
+  onChange: (patch: Partial<CatalogFilters>) => void
+}) {
+  const current =
+    scopeOptions.find((option) => option.value === filters.scope)?.label ??
+    'Ambas listas'
+  const narrowed = scopeFilterApplies(filters)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          size="sm"
+          variant={narrowed ? 'default' : 'outline'}
+          className="gap-1"
+        >
+          {narrowed ? current : 'Lista'}
+          <ChevronDownIcon />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuRadioGroup
+          value={filters.scope}
+          onValueChange={(value) => onChange({ scope: value as ScopeFilter })}
+        >
+          {scopeOptions.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   RatingPicker,
+  ScopePicker,
   StatusPicker,
   StateBadge,
   mediaTypeLabel,
@@ -16,7 +17,7 @@ import { ReviewsSection } from '@/components/reviews'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { useCatalog, useCatalogMutations } from '@/lib/queries'
-import type { WatchStatus } from '@/lib/catalog'
+import type { WatchScope, WatchStatus } from '@/lib/catalog'
 import { formatShortDate } from '@/lib/format'
 import { backdropUrl, posterUrl } from '@/lib/tmdb/config'
 import { fetchTitleDetails, trailerEmbedUrl } from '@/lib/tmdb/details'
@@ -58,6 +59,7 @@ function TitleDetailPage() {
 
   const busy =
     mutations.setStatus.isPending ||
+    mutations.setScope.isPending ||
     mutations.clearStatus.isPending ||
     mutations.rate.isPending ||
     mutations.favorite.isPending
@@ -98,6 +100,10 @@ function TitleDetailPage() {
     } else {
       mutations.setStatus.mutate({ titleId: localTitleId, status })
     }
+  }
+
+  function setScope(scope: WatchScope) {
+    mutations.setScope.mutate({ titleId: localTitleId, scope })
   }
 
   return (
@@ -219,6 +225,18 @@ function TitleDetailPage() {
               disabled={busy}
               onChange={setStatus}
             />
+            {myStatus === 'watchlist' ? (
+              <>
+                <p className="text-xs font-medium text-muted-foreground">
+                  En qué lista
+                </p>
+                <ScopePicker
+                  scope={item.ownScope}
+                  disabled={busy}
+                  onChange={setScope}
+                />
+              </>
+            ) : null}
             <div className="flex items-center justify-between gap-2">
               <RatingPicker
                 rating={item.ownRating}
@@ -258,6 +276,11 @@ function TitleDetailPage() {
                 No se pudo actualizar el estado.
               </p>
             ) : null}
+            {mutations.setScope.isError ? (
+              <p role="alert" className="text-xs text-destructive">
+                No se pudo mover el título de lista.
+              </p>
+            ) : null}
             {item.ownUpdatedAt ? (
               <div className="border-t border-border pt-2">
                 <RemoveTitleDialog
@@ -269,6 +292,7 @@ function TitleDetailPage() {
                         type: 'all',
                         status: 'all',
                         favorites: 'all',
+                        scope: 'all',
                         query: '',
                       },
                     })

@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { posterUrl } from '@/lib/tmdb/config'
-import type { CatalogItem } from '@/lib/catalog'
-import type { WatchStatus } from '@/lib/catalog'
+import type { CatalogItem, WatchScope, WatchStatus } from '@/lib/catalog'
+import { WATCHLIST_SCOPES, watchlistScopeLabel } from '@/lib/watchlist'
 
 export type { CatalogItem }
 
@@ -247,6 +247,47 @@ export function StatusPicker({
             onClick={() => onChange(option.value)}
           >
             {option.label}
+          </Button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Moves a pending title between the household queue and the viewer's own one.
+ * Only rendered while the status is «Pendiente», since the scope of a title
+ * that is not pending is meaningless.
+ */
+export function ScopePicker({
+  scope,
+  onChange,
+  disabled,
+}: {
+  scope: WatchScope | null
+  onChange: (scope: WatchScope) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {WATCHLIST_SCOPES.map((option) => {
+        const active = scope === option
+        return (
+          <Button
+            key={option}
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            aria-pressed={active}
+            className={
+              active
+                ? 'bg-secondary text-secondary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }
+            onClick={() => onChange(option)}
+          >
+            {watchlistScopeLabel(option)}
           </Button>
         )
       })}

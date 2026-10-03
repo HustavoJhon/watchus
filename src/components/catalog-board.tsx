@@ -15,20 +15,25 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
 import { TitleCard, type CatalogItem } from '@/components/catalog'
+import { positionForScope } from '@/lib/catalog-order'
+import type { WatchlistScope } from '@/lib/watchlist'
 import { cn } from '@/lib/utils'
 
 /**
- * Sortable grid of the shared household watchlist (Phase 9). `items` is the
- * filtered subset in display order; `onMove(from, to)` receives the positions
- * inside that subset and the caller resolves the full household order via
- * reorderWithSubset.
+ * Sortable grid of one pending queue. `items` is the filtered subset in display
+ * order and `onMove(from, to)` receives positions inside that subset; the caller
+ * resolves the full queue order via reorderWithSubset and submits only that
+ * queue, because the household and personal queues are separate lists.
  */
 export function ReorderBoard({
   items,
   onMove,
+  scope = 'shared',
 }: {
   items: CatalogItem[]
   onMove: (from: number, to: number) => void
+  /** Which queue's position each card should display. */
+  scope?: WatchlistScope
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -59,6 +64,7 @@ export function ReorderBoard({
               key={item.title.id}
               item={item}
               index={index}
+              scope={scope}
               featured={index === 0}
               canMoveUp={index > 0}
               canMoveDown={index < items.length - 1}
@@ -74,6 +80,7 @@ export function ReorderBoard({
 function SortableCard({
   item,
   index,
+  scope,
   featured,
   canMoveUp,
   canMoveDown,
@@ -81,6 +88,7 @@ function SortableCard({
 }: {
   item: CatalogItem
   index: number
+  scope: WatchlistScope
   /** Highlights the first pending item («lo próximo por ver»). */
   featured?: boolean
   canMoveUp: boolean
@@ -113,7 +121,7 @@ function SortableCard({
     >
       <TitleCard
         item={item}
-        position={item.watchlistPosition}
+        position={positionForScope(item, scope)}
         menu={
           <div className="flex flex-col items-end gap-1">
             <Button
