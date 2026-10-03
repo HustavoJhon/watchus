@@ -9,11 +9,11 @@ Solo existen tres variables, todas de cliente. En producción están definidas
 en Vercel → Project → Settings → Environment Variables (targets production,
 preview y development):
 
-| Variable                 | Dónde                                              | Valor en prod (ref)        |
-| ------------------------ | -------------------------------------------------- | -------------------------- |
+| Variable                 | Dónde                                              | Valor en prod (ref)                        |
+| ------------------------ | -------------------------------------------------- | ------------------------------------------ |
 | `VITE_SUPABASE_URL`      | Supabase → Settings → API                          | `https://qgrjvafeqlrimttyekxq.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API (publishable `anon` key) | key `anon` del proyecto    |
-| `VITE_TMDB_API_KEY`      | TMDB → Settings → API (v3 read-only)               | key `bbbcd87…`             |
+| `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API (publishable `anon` key) | key `anon` del proyecto                    |
+| `VITE_TMDB_API_KEY`      | TMDB → Settings → API (v3 read-only)               | key `bbbcd87…`                             |
 
 Reglas de hierro:
 
