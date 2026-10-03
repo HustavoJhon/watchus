@@ -1,17 +1,32 @@
 import type { CatalogItem } from '@/lib/catalog'
+import type { WatchlistScope } from '@/lib/watchlist'
 
 /**
- * Orders the pending list: the shared household watchlist position wins, then
- * titles without a position fall back to the default catalog order (newest
- * created first). Titles leaving the watchlist keep a (compacted) position
- * behind the pending block, so the relative order is preserved.
+ * Reads the position a title holds in one of the two queues. They are separate
+ * lists, so a title can be positioned in one, both or neither.
+ */
+export function positionForScope(
+  item: CatalogItem,
+  scope: WatchlistScope,
+): number | null {
+  return scope === 'shared' ? item.sharedPosition : item.personalPosition
+}
+
+/**
+ * Orders a pending list by its queue position. Titles without a position fall
+ * back to the default catalog order (newest created first).
+ *
+ * The server keeps each queue gap-free 1..N and holds exactly one row per
+ * pending title, so the fallback is only a safety net for a title that is
+ * pending but whose order row has not loaded yet.
  */
 export function compareWatchlistPosition(
   a: CatalogItem,
   b: CatalogItem,
+  scope: WatchlistScope,
 ): number {
-  const pa = a.watchlistPosition
-  const pb = b.watchlistPosition
+  const pa = positionForScope(a, scope)
+  const pb = positionForScope(b, scope)
   if (pa != null && pb != null) return pa - pb
   if (pa != null) return -1
   if (pb != null) return 1
@@ -21,26 +36,58 @@ export function compareWatchlistPosition(
   )
 }
 
-export function sortByWatchlistPosition(items: CatalogItem[]): CatalogItem[] {
-  return [...items].sort(compareWatchlistPosition)
+export function sortByWatchlistPosition(
+  items: CatalogItem[],
+  scope: WatchlistScope,
+): CatalogItem[] {
+  return [...items].sort((a, b) => compareWatchlistPosition(a, b, scope))
 }
 
 /**
- * Maps the household's order rows onto the items and returns them sorted.
+ * Maps order rows onto the items for one queue and returns them sorted.
  * Items without an order row keep the default catalog order.
  */
 export function attachWatchlistOrder(
   items: CatalogItem[],
   order: Array<{ title_id: string; position: number }>,
+  scope: WatchlistScope,
 ): CatalogItem[] {
   const positionByTitle = new Map(
     order.map((row) => [row.title_id, row.position]),
   )
-  const withPosition = items.map((item) => ({
-    ...item,
-    watchlistPosition: positionByTitle.get(item.title.id) ?? null,
-  }))
-  return sortByWatchlistPosition(withPosition)
+  const withPosition = items.map((item) =>
+    scope === 'shared'
+      ? {
+          ...item,
+          sharedPosition: positionByTitle.get(item.title.id) ?? null,
+        }
+      : {
+          ...item,
+          personalPosition: positionByTitle.get(item.title.id) ?? null,
+        },
+  )
+  return sortByWatchlistPosition(withPosition, scope)
+}
+
+/**
+ * Writes positions 1..N onto the items of one queue, leaving the other queue's
+ * positions untouched. Used by the optimistic reorder so the numbers the UI
+ * shows match the order that was just submitted.
+ */
+export function applyOptimisticPositions(
+  items: CatalogItem[],
+  orderedTitleIds: string[],
+  scope: WatchlistScope,
+): CatalogItem[] {
+  const positionById = new Map(
+    orderedTitleIds.map((id, index) => [id, index + 1]),
+  )
+  return items.map((item) => {
+    const position = positionById.get(item.title.id) ?? null
+    return scope === 'shared'
+      ? { ...item, sharedPosition: position }
+      : { ...item, personalPosition: position }
+  })
 }
 
 /**
@@ -64,9 +111,9 @@ export function moveItem<T>(items: T[], from: number, to: number): T[] {
 }
 
 /**
- * Produces the catalog array that reflects a new pending order: the ordered
- * pending titles (given as title ids) come first, everything else keeps its
- * place behind them. Used for the optimistic reorder update.
+ * Produces the catalog array that reflects a new order for one queue: the
+ * ordered titles come first, everything else keeps its place behind them.
+ * Positions are written separately by `applyOptimisticPositions`.
  */
 export function applyPendingOrder(
   items: CatalogItem[],

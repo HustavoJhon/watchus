@@ -6,6 +6,7 @@ import {
   hasActiveFilters,
   matchesCatalogQuery,
   matchesCatalogFilters,
+  scopeFilterApplies,
 } from '@/lib/catalog-filter'
 import type { CatalogFilters } from '@/lib/catalog-filter'
 import type { CatalogItem } from '@/lib/catalog'
@@ -39,7 +40,10 @@ function item(overrides: Partial<CatalogItem> = {}): CatalogItem {
     partnerRating: null,
     ownUpdatedAt: null,
     partnerUpdatedAt: null,
-    watchlistPosition: null,
+    ownScope: null,
+    partnerScope: null,
+    sharedPosition: null,
+    personalPosition: null,
     ...overrides,
   }
 }
@@ -63,6 +67,7 @@ const fixture: CatalogItem[] = [
       tmdb_id: 399055,
     }),
     ownStatus: 'watchlist',
+    ownScope: 'shared',
   }),
   item({
     title: title({ id: 't1', title: 'Dark', media_type: 'tv', tmdb_id: 70523 }),
@@ -77,6 +82,52 @@ const fixture: CatalogItem[] = [
       tmdb_id: 66732,
     }),
     ownStatus: 'watched',
+  }),
+]
+
+/**
+ * Separate fixture for the scope filter, so the counts asserted by the other
+ * suites stay stable.
+ */
+const scopeFixture: CatalogItem[] = [
+  item({
+    title: title({
+      id: 's1',
+      title: 'Común',
+      media_type: 'movie',
+      tmdb_id: 710,
+    }),
+    ownStatus: 'watchlist',
+    ownScope: 'shared',
+  }),
+  item({
+    title: title({ id: 's2', title: 'Mío', media_type: 'movie', tmdb_id: 711 }),
+    ownStatus: 'watchlist',
+    ownScope: 'personal',
+  }),
+  // Only the partner holds it pending, and as personal: neither queue.
+  item({
+    title: title({
+      id: 's3',
+      title: 'Secreto',
+      media_type: 'movie',
+      tmdb_id: 712,
+    }),
+    ownStatus: null,
+    partnerStatus: 'watchlist',
+    partnerScope: 'personal',
+  }),
+  // Only the partner holds it pending, as shared: household queue.
+  item({
+    title: title({
+      id: 's4',
+      title: 'Puesto',
+      media_type: 'movie',
+      tmdb_id: 713,
+    }),
+    ownStatus: null,
+    partnerStatus: 'watchlist',
+    partnerScope: 'shared',
   }),
 ]
 
@@ -207,6 +258,90 @@ describe('hasActiveFilters', () => {
     ).toBe(true)
     expect(hasActiveFilters({ ...DEFAULT_FILTERS, query: 'd' })).toBe(true)
   })
+
+  it('counts the scope only while filtering by pending', () => {
+    expect(
+      hasActiveFilters({
+        ...DEFAULT_FILTERS,
+        status: 'watchlist',
+        scope: 'shared',
+      }),
+    ).toBe(true)
+    // The scope is inert outside «Pendientes», so it adds nothing here: the
+    // status alone already makes these active.
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, scope: 'shared' })).toBe(
+      false,
+    )
+    expect(
+      hasActiveFilters({
+        ...DEFAULT_FILTERS,
+        status: 'watched',
+        scope: 'personal',
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('scope filtering', () => {
+  const pending: CatalogFilters = { ...allFilters, status: 'watchlist' }
+
+  const ids = (items: CatalogItem[]) => items.map((i) => i.title.id)
+
+  it('falls back to the viewer own pending when the scope is all', () => {
+    // Without a queue selected «Pendientes» keeps its legacy meaning: what the
+    // viewer has pending, in either queue. s4 is the partner's, s3 is personal
+    // to them, so neither belongs here.
+    expect(ids(filterCatalog(scopeFixture, pending))).toEqual(['s1', 's2'])
+  })
+
+  it('keeps only the household queue for scope shared', () => {
+    expect(
+      ids(filterCatalog(scopeFixture, { ...pending, scope: 'shared' })),
+    ).toEqual(['s1', 's4'])
+  })
+
+  it('keeps only the viewer own queue for scope personal', () => {
+    expect(
+      ids(filterCatalog(scopeFixture, { ...pending, scope: 'personal' })),
+    ).toEqual(['s2'])
+  })
+
+  it('ignores the scope when the status is not pending', () => {
+    const watching: CatalogFilters = {
+      ...allFilters,
+      status: 'watched',
+      scope: 'personal',
+    }
+    expect(ids(filterCatalog(scopeFixture, watching))).toEqual([])
+  })
+
+  it('never leaks a partner personal title into the shared scope', () => {
+    const shared = filterCatalog(scopeFixture, { ...pending, scope: 'shared' })
+    expect(ids(shared)).not.toContain('s3')
+  })
+})
+
+describe('scopeFilterApplies', () => {
+  it('is true only when pending plus a narrowed scope', () => {
+    expect(scopeFilterApplies({ ...allFilters, status: 'watchlist' })).toBe(
+      false,
+    )
+    expect(
+      scopeFilterApplies({
+        ...allFilters,
+        status: 'watchlist',
+        scope: 'shared',
+      }),
+    ).toBe(true)
+    expect(
+      scopeFilterApplies({
+        ...allFilters,
+        status: 'watchlist',
+        scope: 'personal',
+      }),
+    ).toBe(true)
+    expect(scopeFilterApplies({ ...allFilters, scope: 'shared' })).toBe(false)
+  })
 })
 
 describe('countLabelOf', () => {
@@ -314,6 +449,33 @@ describe('countLabelOf', () => {
         },
       ),
     ).toBe('1 película pendiente')
+  })
+
+  it('names the queue in the label', () => {
+    expect(
+      countLabelOf(
+        filterCatalog(scopeFixture, {
+          ...allFilters,
+          status: 'watchlist',
+          scope: 'shared',
+        }),
+        {
+          ...allFilters,
+          status: 'watchlist',
+          scope: 'shared',
+        },
+      ),
+    ).toBe('2 títulos pendientes del hogar')
+    expect(
+      countLabelOf(
+        filterCatalog(scopeFixture, {
+          ...allFilters,
+          status: 'watchlist',
+          scope: 'personal',
+        }),
+        { ...allFilters, status: 'watchlist', scope: 'personal' },
+      ),
+    ).toBe('1 título pendiente solo para mí')
   })
 
   it('labels watching series', () => {

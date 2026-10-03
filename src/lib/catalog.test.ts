@@ -24,6 +24,7 @@ function stateRow(
   t: TitleRow,
   overrides: Partial<{
     watch_status: 'watchlist' | 'watching' | 'watched' | null
+    watch_scope: 'shared' | 'personal'
     watched_at: string | null
     rating: number | null
     is_favorite: boolean
@@ -33,6 +34,7 @@ function stateRow(
   return {
     user_id: userId,
     watch_status: overrides.watch_status ?? null,
+    watch_scope: overrides.watch_scope ?? 'shared',
     watched_at: overrides.watched_at ?? null,
     rating: overrides.rating ?? null,
     is_favorite: overrides.is_favorite ?? false,
@@ -80,6 +82,60 @@ describe('buildCatalog', () => {
     expect(item.ownFavorite).toBe(true)
     expect(item.ownRating).toBe(3.5)
   })
+
+  it('carries each row own watch scope', () => {
+    const t = title()
+    const rows = [
+      stateRow('me', t, { watch_status: 'watchlist', watch_scope: 'personal' }),
+      stateRow('partner', t, {
+        watch_status: 'watchlist',
+        watch_scope: 'shared',
+      }),
+    ]
+    const [item] = buildCatalog(rows, 'me')
+    expect(item.ownScope).toBe('personal')
+    expect(item.partnerScope).toBe('shared')
+  })
+
+  it('defaults a missing scope to shared', () => {
+    const [item] = buildCatalog(
+      [stateRow('me', title(), { watch_status: 'watchlist' })],
+      'me',
+    )
+    expect(item.ownScope).toBe('shared')
+  })
+
+  it('does not merge a movie and a series that share a TMDB id', () => {
+    const movie = title()
+    // Same tmdb_id, different local id and media_type: these are two entries.
+    const series = title({ id: 'title-2', media_type: 'tv', title: 'Dune' })
+    const rows = [
+      stateRow('me', movie, { watch_status: 'watched' }),
+      stateRow('partner', movie, { watch_status: 'watchlist' }),
+      stateRow('me', series, {
+        watch_status: 'watchlist',
+        watch_scope: 'personal',
+      }),
+    ]
+
+    const items = buildCatalog(rows, 'me')
+
+    expect(items).toHaveLength(2)
+    expect(items.map((i) => i.title.id)).toEqual([movie.id, series.id])
+    expect(items[0].partnerStatus).toBe('watchlist')
+    expect(items[1].partnerStatus).toBeNull()
+    expect(items[1].ownScope).toBe('personal')
+  })
+
+  it('reports a default shared scope when the member has no row', () => {
+    const items = buildCatalog(
+      [stateRow('partner', title(), { watch_status: 'watchlist' })],
+      'me',
+    )
+    expect(items[0].ownStatus).toBeNull()
+    expect(items[0].ownScope).toBeNull()
+    expect(items[0].partnerScope).toBe('shared')
+  })
 })
 
 describe('watchedByBoth', () => {
@@ -95,7 +151,10 @@ describe('watchedByBoth', () => {
       partnerRating: null,
       ownUpdatedAt: null,
       partnerUpdatedAt: null,
-      watchlistPosition: null,
+      ownScope: 'shared',
+      partnerScope: 'shared',
+      sharedPosition: null,
+      personalPosition: null,
     }
     expect(watchedByBoth(base)).toBe(true)
     expect(watchedByBoth({ ...base, partnerStatus: 'watchlist' })).toBe(false)
