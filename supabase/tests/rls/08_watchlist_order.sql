@@ -7,8 +7,11 @@
 --   * the RPC reorder_household_watchlist rejects duplicates, missing titles,
 --     foreign titles and non-pending titles; positions stay 1..N gap-free.
 --   * other households are fully isolated (no select/insert/update/delete).
---   * leaving the watchlist keeps the row (priority preserved on return);
---     fully removing the title removes the order row through the FK cascade.
+--   * the queue holds ONE row per pending shared title and is gap-free 1..N;
+--     leaving the pending set drops the row and re-entering appends at the end
+--     (pending-only, D-23), so the client and the RPC can never disagree about
+--     which titles are pending.
+--   * fully removing the title removes the order row through the FK cascade.
 
 -- ============================================================
 -- SETUP (postgres, bypass RLS)
@@ -187,14 +190,18 @@ COMMIT;
 -- (expected ERRORs above: duplicate / whole pending / not pending / incomplete)
 
 -- ============================================================
--- R6: watched titles are no longer "pending" -> cannot be reordered
+-- R6: watched titles leave the queue entirely (pending-only, D-23)
 -- ============================================================
+-- Under the pending-only contract the order table holds ONE row per PENDING
+-- shared title, so leaving the pending set deletes the row and compacts the
+-- queue. This is what removed the old gaps (#1, #3) and the stale position that
+-- used to make the client and the RPC disagree about the pending set.
 BEGIN;
 set local role authenticated;
 set local request.jwt.claim.sub = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
 
--- Move Interstellar to 'watched': the order row is KEPT (priority preserved),
--- but the title leaves the pending set, so reordering with it must fail.
+-- Move Interstellar to 'watched': nobody else keeps it pending, so its row is
+-- deleted and the title leaves the pending set entirely.
 update public.user_title_state
 set watch_status = 'watched'
 where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
@@ -207,9 +214,11 @@ select public.reorder_household_watchlist(
 );
 rollback to savepoint sp_watched;
 
-select 'R6 kept_row_preserved' as tag,
-       position::text as got,
-       '1' as expected
+-- count(*) always returns exactly one row, so a missing row is a real failure
+-- and not a silently empty result set.
+select 'R6 row_dropped_when_nobody_pending' as tag,
+       count(*)::int as got,
+       0 as expected
 from public.household_watchlist_order
 where household_id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa'
   and title_id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1';
@@ -266,8 +275,11 @@ COMMIT;
 
 BEGIN;
 select 'R7c c_does_not_touch_h1' as tag,
-       string_agg(title_id || ':' || position, ',' order by position) as got,
-       'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2:1,dddddddd-dddd-4ddd-8ddd-ddddddddddd1:2' as expected
+       coalesce(
+         string_agg(title_id || ':' || position, ',' order by position),
+         ''
+       ) as got,
+       'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2:1' as expected
 from public.household_watchlist_order
 where household_id = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 COMMIT;
@@ -291,11 +303,11 @@ where household_id = 'cccccccc-2222-4222-8222-cccccccccccc';
 COMMIT;
 
 -- ============================================================
--- R9: both members on the same pending title still get ONE order row
+-- R9: re-entering the watchlist APPENDS at the end (pending-only, D-23)
 -- ============================================================
--- A re-adds Interstellar as 'watchlist' again. Its order row was kept through
--- R6 (priority preserved), so nothing new is appended: still one row, and the
--- shared pending set is unchanged.
+-- A re-adds Interstellar as 'watchlist'. Its row was dropped in R6, so it is
+-- appended again rather than resuming a stale priority. Still exactly one row
+-- for the title, and the pending set is a gap-free 1..N.
 BEGIN;
 set local role authenticated;
 set local request.jwt.claim.sub = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
@@ -305,7 +317,7 @@ set watch_status = 'watchlist'
 where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
   and title_id = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1';
 
-select 'R9 reentry_reuses_kept_row' as tag,
+select 'R9 reentry_appends_at_end' as tag,
        string_agg(title_id || ':' || position, ',' order by position) as got,
        'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2:1,dddddddd-dddd-4ddd-8ddd-ddddddddddd1:2' as expected
 from public.household_watchlist_order
