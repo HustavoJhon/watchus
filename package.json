@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:db": "./supabase/tests/run-rls-tests.sh",
     "preview": "vite preview"
   },
   "dependencies": {
