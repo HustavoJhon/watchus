@@ -143,5 +143,18 @@ No hay infraestructura E2E previa. Playwright aportaría regeneración de acceso
 - Las políticas `profiles|user_title_state|reviews_*_self` impiden escribir
   filas ajenas; la lectura se limita al propio hogar vía
   `private.my_watch_partners()`.
+- La cola «solo para mí» es opaca para la pareja en las dos capas:
+  - `personal_watchlist_order` exige `user_id = auth.uid()` en las cuatro
+    operaciones.
+  - `user_title_state` **no** es opaca por diseño (el hogar necesita ver los
+    estados del otro para derivar «visto por ambos»), pero su política SELECT
+    excluye las filas pendientes en ámbito `personal`, que son justamente la
+    pertenencia a la cola privada (`20260913120000_personal_scope_privacy.sql`).
+- Realtime solo se suscribe a `user_title_state` y
+  `household_watchlist_order`. **No** a `personal_watchlist_order`: Realtime no
+  aplica RLS a los eventos `DELETE` («RLS policies are not applied to DELETE
+  statements»), así que suscribirse filtraría a la pareja el `title_id` de cada
+  título que sale de la lista privada. Comprobado en local con dos cuentas
+  reales; `REPLICA IDENTITY FULL` no lo evita.
 - Las páginas y rutas son privadas (layout `_authenticated` con `beforeLoad`);
   no se necesitan robots ni metadatos SEO (no indexar).

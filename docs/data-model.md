@@ -87,6 +87,29 @@ Enum `watch_status`:
 
 Son colas **independientes**: un título puede tener posición en las dos a la vez (la pareja lo marcó `shared` y yo `personal`). Por eso cada fila de orden tiene su propia numeración 1..N y mover un título de una cola a otra lo añade al final de la destino y compacta la de origen.
 
+#### La privacidad del ámbito personal (`20260913120000`)
+
+`user_title_state` es legible por el hogar entero: el catálogo necesita los estados del otro miembro para derivar «visto por ambos» y las notas. Pero al vivir ahí `watch_scope`, esa lectura previa pasó a revelar la pertenencia a la cola privada:
+
+```sql
+-- antes: la pareja veía todo
+using (user_id = auth.uid() or user_id in (select private.my_watch_partners()))
+```
+
+Consecuencia medida con dos cuentas reales del mismo hogar: `GET /rest/v1/user_title_state?user_id=eq.<pareja>` devolvía los tres títulos de su lista «solo para mí», y Realtime (que aplica la misma comprobación) avisaba en cuanto la pareja añadía algo. La política actual solo deja fuera lo que es información de la cola privada:
+
+```sql
+using (
+  user_id = (select auth.uid())
+  or (user_id in (select private.my_watch_partners())
+      and (watch_status is distinct from 'watchlist' or watch_scope <> 'personal'))
+)
+```
+
+Es decir: los **pendientes en `personal`** son invisibles para la pareja; los pendientes compartidos y los estados ya no pendientes (`watching`/`watched`, con el ámbito que sea) siguen viéndose, porque no pertenecen a ninguna cola —solo hay fila de orden mientras la fila está pendiente— y hacen falta para las derivaciones del catálogo. Cobertura en `supabase/tests/rls/10_personal_scope_privacy.sql`.
+
+`personal_watchlist_order` mantiene además sus cuatro políticas `user_id = auth.uid()`, y el cliente **no** se suscribe a ella por Realtime: la plataforma no aplica RLS a los eventos `DELETE`, de modo que una suscripción revelaría a la pareja el `title_id` de cada título que sale de la lista privada. Ver `docs/production.md` §6.
+
 "Visto por ambos" **no se almacena** (no hay columna `watched_by_both`): se deriva en memoria en el cliente con `buildCatalog` (`src/lib/catalog.ts`) agrupando las filas de `user_title_state` visibles para el hogar. Ver tests `CT14`.
 
 Consulta "visto por ambos" (ver §9, Q2): se compara el conteo de filas `'watched'` del hogar contra el número de miembros del hogar.
