@@ -9,6 +9,54 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      episode_ratings: {
+        Row: {
+          created_at: string
+          episode_number: number
+          rating: number
+          season_number: number
+          title_id: string
+          tmdb_episode_id: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          episode_number: number
+          rating: number
+          season_number: number
+          title_id: string
+          tmdb_episode_id: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          episode_number?: number
+          rating?: number
+          season_number?: number
+          title_id?: string
+          tmdb_episode_id?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'episode_ratings_title_id_fkey'
+            columns: ['title_id']
+            isOneToOne: false
+            referencedRelation: 'titles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'episode_ratings_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       household_watchlist_order: {
         Row: {
           created_at: string

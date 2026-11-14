@@ -4,8 +4,8 @@ import type { Database } from '@/types/database'
 export type HouseholdRow = Database['public']['Tables']['households']['Row']
 export type ProfileRow = Database['public']['Tables']['profiles']['Row']
 
-export function getUserProfile() {
-  return supabase.from('profiles').select('*').maybeSingle()
+export function getUserProfile(userId: string) {
+  return supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
 }
 
 export function getProfileByUserId(userId: string) {

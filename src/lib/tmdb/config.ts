@@ -28,3 +28,11 @@ export function backdropUrl(
   if (!path) return null
   return `${TMDB_IMAGE_BASE_URL}/w${width}${path}`
 }
+
+export function stillUrl(
+  path: string | null | undefined,
+  width = 300,
+): string | null {
+  if (!path) return null
+  return `${TMDB_IMAGE_BASE_URL}/w${width}${path}`
+}

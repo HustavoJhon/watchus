@@ -1,6 +1,10 @@
 import { tmdbGet } from './client'
 import { parseYear } from './mapper'
-import type { TmdbDetailResponse, TmdbMediaType } from './types'
+import type {
+  TmdbDetailResponse,
+  TmdbMediaType,
+  TmdbSeasonDetailResponse,
+} from './types'
 
 export interface CastMember {
   name: string
@@ -20,6 +24,36 @@ export interface TitleDetails {
   director: string | null
   creators: string[]
   trailerKey: string | null
+  /** TV only: seasons available for this series (including specials, 0). */
+  seasons: SeasonSummary[]
+}
+
+export interface SeasonSummary {
+  /** TMDB season id. */
+  id: number
+  name: string
+  seasonNumber: number
+  episodeCount: number
+  airDate: string | null
+  posterPath: string | null
+}
+
+export interface EpisodeSummary {
+  /** TMDB episode id, stable across API calls. */
+  id: number
+  name: string
+  overview: string
+  seasonNumber: number
+  episodeNumber: number
+  airDate: string | null
+  stillPath: string | null
+  runtimeMinutes: number | null
+}
+
+export interface SeasonEpisodes {
+  name: string
+  seasonNumber: number
+  episodes: EpisodeSummary[]
 }
 
 function findDirector(detail: TmdbDetailResponse): string | null {
@@ -71,6 +105,48 @@ export async function fetchTitleDetails(
     director: findDirector(detail),
     creators: (detail.created_by ?? []).map((creator) => creator.name ?? ''),
     trailerKey: findTrailer(detail),
+    seasons: (detail.seasons ?? [])
+      .filter((season) => (season.season_number ?? 0) >= 0)
+      .sort((a, b) => (a.season_number ?? 0) - (b.season_number ?? 0))
+      .map((season) => ({
+        id: season.id,
+        name: season.name?.trim() || `Temporada ${season.season_number ?? '?'}`,
+        seasonNumber: season.season_number ?? 0,
+        episodeCount: season.episode_count ?? 0,
+        airDate: season.air_date ?? null,
+        posterPath: season.poster_path ?? null,
+      })),
+  }
+}
+
+/**
+ * Fetches one season's episodes on demand, straight from TMDB. The detail page
+ * only requests the season the viewer is looking at, so a long series never
+ * downloads every episode up front.
+ */
+export async function fetchSeasonEpisodes(
+  tmdbId: number,
+  seasonNumber: number,
+): Promise<SeasonEpisodes> {
+  const season = await tmdbGet<TmdbSeasonDetailResponse>(
+    `/tv/${tmdbId}/season/${seasonNumber}`,
+  )
+
+  return {
+    name: season.name?.trim() || `Temporada ${seasonNumber}`,
+    seasonNumber: season.season_number ?? seasonNumber,
+    episodes: (season.episodes ?? [])
+      .map((episode) => ({
+        id: episode.id,
+        name: episode.name?.trim() || 'Episodio sin título',
+        overview: episode.overview ?? '',
+        seasonNumber: episode.season_number ?? seasonNumber,
+        episodeNumber: episode.episode_number ?? 0,
+        airDate: episode.air_date ?? null,
+        stillPath: episode.still_path ?? null,
+        runtimeMinutes: episode.runtime ?? null,
+      }))
+      .sort((a, b) => a.episodeNumber - b.episodeNumber),
   }
 }
 

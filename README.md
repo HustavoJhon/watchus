@@ -13,6 +13,7 @@ Una aplicación web para que dos personas lleven una colección compartida de pe
 
 ## Estado
 
+- **Fase 11 (completada):** calificaciones por episodio en las series — el detalle de una serie lista sus temporadas y carga los episodios de la temporada abierta bajo demanda desde TMDB (nunca se cachean en la BD), y cada capítulo tiene su propio selector de nota 0.5–5. Las notas viven en `episode_ratings` (una fila por usuario, título y episodio de TMDB), con RLS de escritura propia y lectura para todo el hogar, de modo que cada miembro ve su nota y la de su pareja junto al episodio. Quitar la nota borra la fila; quitar el título del catálogo borra solo las notas propias. Tests RLS (`11_episode_ratings.sql`) y unitarios del cliente TMDB. Además, el cliente degrada con elegancia si la base de datos va por detrás de las migraciones (catálogo sin `watch_scope`/`personal_watchlist_order`, o sin `episode_ratings`) en vez de dejar «Inicio» y «Catálogo» en blanco.
 - **Fase 9 (completada):** dos listas de pendientes independientes y ordenables — **del hogar** (`household_watchlist_order`, idéntica para ambos miembros; el botón "Me gusta" y la decisión de _qué vemos_ comparten orden) y **solo para mí** (`personal_watchlist_order`, con RLS que la vuelve opaca incluso para la pareja: no puede leerla, escribirla ni ordenarla, y tampoco se suscribe a ella por Realtime). El ámbito vive en `user_title_state.watch_scope`, así que un título puede estar en las dos colas a la vez con posiciones independientes. Como el ámbito está en una tabla que el hogar sí puede leer, la política SELECT de `user_title_state` excluye explícitamente las filas **pendientes en ámbito personal** de la pareja (`20260913120000_personal_scope_privacy.sql`); los estados ya no pendientes siguen siendo visibles para no romper la derivación de «visto por ambos». Reordenamiento atómico por RPC (`reorder_household_watchlist` / `reorder_personal_watchlist`) con validación del conjunto pendiente completo y mensaje de error explicativo, drag & drop (dnd-kit, mobile-first) con fallback de flechas y teclado, filtro de lista en search params compartibles, badge de posición en tarjetas, un único trigger que mantiene ambas colas al entrar/salir de pendientes y al cambiar de ámbito, sincronización por Realtime, tests RLS (`08_watchlist_order.sql`, `09_watchlist_scopes.sql`, `10_personal_scope_privacy.sql`) y unitarios de ordenamiento, ámbitos, filtros y errores.
 - **Fase 8 (completada):** gestión y filtrado del catálogo — eliminación segura por usuario (RPC `remove_title_from_catalog` solo borra el estado/reseña propios y el título compartido solo si queda huérfano; se cierra el DELETE directo sobre `titles` que con CASCADE borraba datos ajenos), filtros combinables Tipo/Estado/Favoritos en search params compartibles, búsqueda local en memoria (sin llamada TMDB), contador con concordancia («3 películas pendientes»), estados vacíos con «Limpiar filtros», menú de eliminación con confirmación en tarjetas y detalle, tests RLS (`07_catalog_management.sql`) y unitarios de filtros.
 - **Fase 7 (completada):** despliegue en producción — Vercel (canónico `https://watchus-orcin.vercel.app`) + Supabase Cloud, smoke tests en prod, comprobaciones en `docs/production.md`.
@@ -92,12 +93,10 @@ pnpm test         # vitest run (unitarios)
 
 ### Suite SQL RLS
 
-Los tests de RLS corren con `psql` contra la base local (cada archivo se ejecuta sin parser de errores en stop: los archivos 04 y 05 incluyen errores esperados por diseño):
+Los tests de RLS corren con `psql` contra la base local. El runner ejecuta cada archivo y compara las filas `tag|got|expected`; los errores dentro de un `SAVEPOINT` son parte del diseño, no un fallo:
 
 ```sh
-for f in supabase/tests/rls/*.sql; do
-  ~/.local/bin/supabase db reset  # o psql directo como postgres
-done
+DB=postgresql://postgres:postgres@127.0.0.1:54322/postgres ./supabase/tests/run-rls-tests.sh
 ```
 
 Más detalles de los comandos exactos en `docs/production.md` y en los comentarios de `supabase/tests/rls/`.
@@ -105,3 +104,5 @@ Más detalles de los comandos exactos en `docs/production.md` y en los comentari
 ## Producción
 
 Ver [docs/production.md](./docs/production.md): pasos para Supabase Cloud, migraciones (`db push`), Auth (site/redirect URLs), variables en Vercel y la rewrite SPA (`vercel.json`). Producción desplegada en `https://watchus-orcin.vercel.app`.
+
+> **Importante:** el frontend y la base de datos se despliegan por separado. Si el deploy va por delante de las migraciones, el cliente sigue funcionando con datos degradados (catálogo sin ámbitos, cola personal vacía, sin notas por episodio), pero las funciones nuevas —cola «solo para mí» y calificaciones por episodio— no estarán operativas hasta ejecutar `supabase db push` contra el proyecto Cloud.

@@ -46,6 +46,13 @@ enlazado (`supabase link`) con ese proyecto.
    ~/.local/bin/supabase db push
    ```
 
+   > **Antes de desplegar el frontend**, comprueba que la nube está al día:
+   > `supabase migration list --linked`. Si faltan migraciones, el cliente
+   > nuevo degrada en vez de romperse (catálogo sin `watch_scope`, cola
+   > personal vacía y sin notas por episodio), pero las funciones nuevas no
+   > estarán operativas. La migración `20261113100000_episode_ratings.sql`
+   > crea `episode_ratings` y actualiza `remove_title_from_catalog`.
+
    Nota: en el esquema los defaults de `join_code` e `invitations.token`
    usan `extensions.gen_random_bytes(...)` **cualificado** — en Cloud la
    función de `pgcrypto` vive en el schema `extensions`, fuera del
@@ -92,8 +99,8 @@ predeterminado de Vercel para `vite build`).
 
 Estado en Fase 7: **completado y validado en prod** (2026-09-08).
 
-1. Base de datos: `supabase db push` contra el proyecto Cloud — aplicadas las
-   4 migraciones.
+1. Base de datos: `supabase db push` contra el proyecto Cloud (todas las
+   migraciones pendientes; comprobar con `migration list --linked`).
 2. Auth: `site_url` y `uri_allow_list` con la URL final; confirmación de email
    ON.
 3. Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
@@ -105,6 +112,10 @@ Estado en Fase 7: **completado y validado en prod** (2026-09-08).
    rotar código, aislamiento RLS entre hogares (2 usuarios por hogar, límite
    activo), catálogo TMDB (búsqueda y get-or-create), estados y reviews
    (compartidos dentro del hogar, ocultos fuera), recovery 200.
+7. Smoke Fase 11 (tras `db push`): abrir una serie → temporadas visibles →
+   calificar un episodio → recargar y comprobar que persiste; con la segunda
+   cuenta del hogar, ver la nota de la pareja y no poder editarla; en un
+   hogar ajeno, no ver ninguna nota.
 
 ## 5. Decisiones evaluadas y diferidas
 
@@ -142,7 +153,8 @@ No hay infraestructura E2E previa. Playwright aportaría regeneración de acceso
 - `search_path = ''` en todos los objetos `security definer`.
 - Las políticas `profiles|user_title_state|reviews_*_self` impiden escribir
   filas ajenas; la lectura se limita al propio hogar vía
-  `private.my_watch_partners()`.
+  `private.my_watch_partners()`. `episode_ratings` sigue el mismo patrón:
+  escritura propia y lectura del hogar.
 - La cola «solo para mí» es opaca para la pareja en las dos capas:
   - `personal_watchlist_order` exige `user_id = auth.uid()` en las cuatro
     operaciones.
