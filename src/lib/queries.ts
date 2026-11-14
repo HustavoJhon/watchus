@@ -12,6 +12,7 @@ import {
   buildCatalog,
   clearWatchStatus,
   getCatalog,
+  getCatalogWithoutScopes,
   getPersonalWatchlistOrder,
   getWatchlistOrder,
   removeTitleFromCatalog,
@@ -29,6 +30,13 @@ import {
   applyPendingOrder,
   attachWatchlistOrder,
 } from '@/lib/catalog-order'
+import { isMissingColumnError, isMissingTableError } from '@/lib/db-errors'
+import {
+  clearEpisodeRating,
+  getEpisodeRatings,
+  setEpisodeRating,
+} from '@/lib/episodes'
+import type { EpisodeRef } from '@/lib/episodes'
 import { describeReorderError } from '@/lib/reorder-error'
 import type { TitleCandidate } from '@/lib/tmdb/mapper'
 import { searchTitles } from '@/lib/tmdb/search'
@@ -50,6 +58,10 @@ export const queryKeys = {
   catalog: (userId: string) => ['catalog', userId] as const,
   reviewForTitle: (titleId: string) => ['reviews', 'title', titleId] as const,
   reviews: () => ['reviews'] as const,
+  episodeRatings: (titleId: string) =>
+    ['episode_ratings', 'title', titleId] as const,
+  seasonEpisodes: (tmdbId: number, seasonNumber: number) =>
+    ['tmdb_season', tmdbId, seasonNumber] as const,
   titleSearch: (query: string, mediaType: SearchMediaType, page: number) =>
     ['title_search', mediaType, query.trim(), page] as const,
 }
@@ -62,7 +74,8 @@ export function useMyProfile(user?: User | null) {
   return useQuery({
     queryKey: queryKeys.profile(user?.id ?? ''),
     queryFn: async () => {
-      const { data, error } = await getUserProfile()
+      if (!user?.id) throw new Error('Sesión no iniciada.')
+      const { data, error } = await getUserProfile(user.id)
       if (error) throw error
       return data
     },
@@ -164,22 +177,44 @@ async function getCatalogRows(userId: string): Promise<{
   sharedOrder: OrderRow[]
   personalOrder: OrderRow[]
 }> {
-  const [catalogQuery, sharedOrderQuery, personalOrderQuery] =
-    await Promise.all([
-      getCatalog(),
-      getWatchlistOrder(),
-      getPersonalWatchlistOrder(),
-    ])
-  const { data: rows, error } = catalogQuery
-  if (error) throw error
+  const [sharedOrderQuery, personalOrderQuery] = await Promise.all([
+    getWatchlistOrder(),
+    getPersonalWatchlistOrder(),
+  ])
+
   const { data: sharedOrder, error: sharedOrderError } = sharedOrderQuery
   if (sharedOrderError) throw sharedOrderError
-  const { data: personalOrder, error: personalOrderError } = personalOrderQuery
-  if (personalOrderError) throw personalOrderError
+
+  // A database that has not run the watchlist-scopes migration has no
+  // personal queue; degrade to an empty one instead of failing the catalog.
+  if (
+    personalOrderQuery.error &&
+    !isMissingTableError(personalOrderQuery.error, 'personal_watchlist_order')
+  ) {
+    throw personalOrderQuery.error
+  }
+  const personalOrder = personalOrderQuery.data ?? []
+
+  const catalogQuery = await getCatalog()
+  let rows = catalogQuery.data
+  if (catalogQuery.error) {
+    // Older database without `watch_scope`: retry without it and treat every
+    // state as 'shared', which is how the app behaved before scopes existed.
+    if (!isMissingColumnError(catalogQuery.error, 'watch_scope')) {
+      throw catalogQuery.error
+    }
+    const legacyQuery = await getCatalogWithoutScopes()
+    if (legacyQuery.error) throw legacyQuery.error
+    rows = (legacyQuery.data ?? []).map((row) => ({
+      ...row,
+      watch_scope: 'shared' as const,
+    }))
+  }
+
   return {
     items: buildCatalog(rows ?? [], userId),
     sharedOrder: sharedOrder ?? [],
-    personalOrder: personalOrder ?? [],
+    personalOrder,
   }
 }
 
@@ -346,6 +381,7 @@ function useRemoveTitleMutation(
     },
     onSuccess: (removed) => {
       onSuccess()
+      void queryClient.invalidateQueries({ queryKey: ['episode_ratings'] })
       if (removed) {
         void queryClient.invalidateQueries({ queryKey: ['reviews'] })
       }
@@ -386,6 +422,43 @@ export function useTitleReviews(titleId: string | undefined) {
     enabled: titleId != null,
     staleTime: 30 * 1000,
   })
+}
+
+/**
+ * Episode ratings for one title (viewer + partner). The query is kept enabled
+ * only when a local title id exists, and it fails softly if the database has
+ * not run the episode-ratings migration yet.
+ */
+export function useEpisodeRatings(titleId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.episodeRatings(titleId ?? ''),
+    queryFn: async () => {
+      const { data, error } = await getEpisodeRatings(titleId!)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: titleId != null,
+    staleTime: 30 * 1000,
+  })
+}
+
+export function useEpisodeRatingMutations(user?: User | null): {
+  rate: ReturnType<typeof useRateEpisodeMutation>
+  clear: ReturnType<typeof useClearEpisodeRatingMutation>
+  isPending: boolean
+} {
+  const queryClient = useQueryClient()
+  const userId = user?.id
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['episode_ratings'] })
+  }
+  const rate = useRateEpisodeMutation(userId, invalidate)
+  const clear = useClearEpisodeRatingMutation(userId, invalidate)
+  return {
+    rate,
+    clear,
+    isPending: rate.isPending || clear.isPending,
+  }
 }
 
 /**
@@ -447,6 +520,46 @@ function useDeleteReviewMutation(
     mutationFn: (titleId: string) => {
       if (!userId) throw new Error('Sesión no iniciada.')
       return deleteReview(userId, titleId)
+    },
+    onSuccess,
+  })
+}
+
+function useRateEpisodeMutation(
+  userId: string | undefined,
+  onSuccess: () => void,
+) {
+  return useMutation({
+    mutationFn: ({
+      titleId,
+      episode,
+      rating,
+    }: {
+      titleId: string
+      episode: EpisodeRef
+      rating: number
+    }) => {
+      if (!userId) throw new Error('Sesión no iniciada.')
+      return setEpisodeRating(userId, titleId, episode, rating)
+    },
+    onSuccess,
+  })
+}
+
+function useClearEpisodeRatingMutation(
+  userId: string | undefined,
+  onSuccess: () => void,
+) {
+  return useMutation({
+    mutationFn: ({
+      titleId,
+      tmdbEpisodeId,
+    }: {
+      titleId: string
+      tmdbEpisodeId: number
+    }) => {
+      if (!userId) throw new Error('Sesión no iniciada.')
+      return clearEpisodeRating(userId, titleId, tmdbEpisodeId)
     },
     onSuccess,
   })

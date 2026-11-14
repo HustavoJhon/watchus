@@ -131,6 +131,20 @@ export function getCatalog() {
 }
 
 /**
+ * Same catalog query without `watch_scope`, for databases that have not run the
+ * watchlist-scopes migration yet. The caller defaults every row to 'shared',
+ * which is exactly the behaviour before scopes existed.
+ */
+export function getCatalogWithoutScopes() {
+  return supabase
+    .from('user_title_state')
+    .select(
+      'user_id, watch_status, watched_at, rating, is_favorite, updated_at, title:titles(*)',
+    )
+    .order('created_at', { referencedTable: 'titles', ascending: false })
+}
+
+/**
  * Adds a title to the shared catalog (race-safe get-or-create) and drops it
  * into the caller's watchlist. Returns the canonical local title row.
  */

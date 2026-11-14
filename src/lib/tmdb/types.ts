@@ -58,6 +58,34 @@ export interface TmdbVideosResponse {
   results?: TmdbVideo[]
 }
 
+export interface TmdbSeasonSummary {
+  id: number
+  name?: string
+  season_number?: number
+  episode_count?: number
+  air_date?: string | null
+  poster_path?: string | null
+  overview?: string
+}
+
+export interface TmdbEpisode {
+  id: number
+  name?: string
+  overview?: string
+  episode_number?: number
+  season_number?: number
+  air_date?: string | null
+  still_path?: string | null
+  runtime?: number | null
+}
+
+export interface TmdbSeasonDetailResponse {
+  id?: number
+  name?: string
+  season_number?: number
+  episodes?: TmdbEpisode[]
+}
+
 export interface TmdbDetailResponse extends TmdbMovieResult {
   release_date?: string
   first_air_date?: string
@@ -68,4 +96,5 @@ export interface TmdbDetailResponse extends TmdbMovieResult {
   credits?: TmdbCreditsResponse
   videos?: TmdbVideosResponse
   created_by?: Array<{ name?: string; id?: number }>
+  seasons?: TmdbSeasonSummary[]
 }

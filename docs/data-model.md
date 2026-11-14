@@ -10,18 +10,21 @@ auth.users (Supabase)
    ▼
 households ──1┼N── profiles ──1┼N── user_title_state ──N┼1── titles
                     │                                   │
-                    │                                   └── reviews
+                    │                                   ├── reviews
+                    │                                   │
+                    │                                   └── episode_ratings
                     │
                     └── N┼1 (mismo user_title_state y reviews por título)
 ```
 
-| Tabla              | Propósito                                                                        |
-| ------------------ | -------------------------------------------------------------------------------- |
-| `households`       | El grupo de dos (la pareja). Define "quiénes comparten la colección".            |
-| `profiles`         | Perfil público de cada usuario, ligado a `auth.users`.                           |
-| `titles`           | Catálogo compartido: un título existe una sola vez por `tmdb_id` + `media_type`. |
-| `user_title_state` | Relación usuario-título: estado, favorito y calificación del usuario.            |
-| `reviews`          | Reseña personal por usuario-título (una por par).                                |
+| Tabla              | Propósito                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| `households`       | El grupo de dos (la pareja). Define "quiénes comparten la colección".              |
+| `profiles`         | Perfil público de cada usuario, ligado a `auth.users`.                             |
+| `titles`           | Catálogo compartido: un título existe una sola vez por `tmdb_id` + `media_type`.   |
+| `user_title_state` | Relación usuario-título: estado, favorito y calificación del usuario.              |
+| `reviews`          | Reseña personal por usuario-título (una por par).                                  |
+| `episode_ratings`  | Calificación personal por episodio de una serie (una por usuario-título-episodio). |
 
 **Interstellar (tmdb_id 157336) se modela así:**
 
@@ -37,7 +40,7 @@ households ──1┼N── profiles ──1┼N── user_title_state ──N
 - **`favorites`** → absorbida como flag `is_favorite` en `user_title_state` (ver decisión 3).
 - **`genres` / `title_genres`** → denormalizada: `titles.genres` es `text[]` (ver decisión 7).
 
-Resultado: 5 tablas de negocio en vez de las 6-8 del borrador, sin perder información.
+Resultado: 5 tablas de negocio en vez de las 6-8 del borrador, sin perder información. (La Fase 11 añadió `episode_ratings` para las notas por capítulo.)
 
 > **Nota (Fase 3):** la invitación al hogar se simplificó con un `join_code` rotable en `households`. El diseño inicial con tabla `invitations` (tokens de un uso) se descartó en la migración `20260907180000_simplify_household_invitations.sql` y la tabla se eliminó: con un hogar privado de máximo 2 integrantes y rotación del código a demanda, el token de un uso era sobredimensionado.
 
@@ -128,6 +131,16 @@ Columna `user_title_state.rating numeric(2,1) null`.
   - `CHECK (rating between 0.5 and 5.0)`
   - `CHECK ((rating * 10) % 5 = 0)` — fuerza el paso de 0.5.
 - La calificación es **individual por usuario**; el promedio para un título se calcula sobre las filas de los miembros del hogar que sí calificaron (`AVG(rating)` sobre `rating is not null`).
+
+### Calificaciones por episodio (Fase 11)
+
+Las series añaden una nota **por capítulo** en `episode_ratings`, independiente de `user_title_state.rating` (que sigue siendo la nota global de la serie). Una fila por `(user_id, title_id, tmdb_episode_id)`:
+
+- `tmdb_episode_id` es la llave del episodio; `season_number`/`episode_number` se guardan junto a ella para pintar la lista sin volver a llamar a TMDB y para validar coherencia.
+- La nota es obligatoria: quitar una nota **borra la fila** (no se almacena `rating` nulo).
+- Mismas constraints que la nota del título: rango 0.5–5.0 y paso de 0.5.
+- Los episodios **no se cachean**: el detalle de la serie trae las temporadas en `fetchTitleDetails` y pide los episodios de la temporada abierta con `fetchSeasonEpisodes` (TMDB on-demand).
+- El hogar puede leer las notas de ambos miembros (la UI muestra «tu nota» y la de la pareja); la escritura es solo propia.
 
 ## 6. Reseñas
 
@@ -232,8 +245,8 @@ El onboarding y la invitación no insertan filas directamente: pasan por RPCs `s
 > **Decisión (Fase 8, D-17):** el DELETE directo sobre `titles` se cerró en la migración `20260908120000_catalog_management.sql`. Antes existía `titles_delete_authenticated` `using (true)`, que permitía a cualquier autenticado borrar cualquier fila de `titles` y, por los `ON DELETE CASCADE` de `user_title_state` y `reviews`, destruía también los estados y reseñas de la pareja y de otros hogares. Ahora la eliminación se hace solo vía el RPC `security definer` `remove_title_from_catalog(p_title_id)`:
 >
 > 1. Valida que el llamante tenga una fila propia en `user_title_state` para ese título (si no, `check_violation` "The title is not in your catalog.") — así nadie toca títulos que no pertenecen a su hogar.
-> 2. Borra **solo** las filas propias del llamante (`user_title_state` y `reviews`); la pareja queda intacta.
-> 3. Borra la fila de `titles` solo si queda huérfana (`not exists` en ambas tablas). Devuelve `true` si el título se eliminó por completo, `false` si el hogar aún lo conserva.
+> 2. Borra **solo** las filas propias del llamante (`user_title_state`, `reviews` y `episode_ratings`); la pareja queda intacta.
+> 3. Borra la fila de `titles` solo si queda huérfana (`not exists` en las tres tablas). Devuelve `true` si el título se eliminó por completo, `false` si el hogar aún lo conserva.
 >
 > Ver tests RLS en `supabase/tests/rls/07_catalog_management.sql`.
 
@@ -249,6 +262,19 @@ El onboarding y la invitación no insertan filas directamente: pasan por RPCs `s
 ### `reviews`
 
 Igual que `user_title_state` (por usuario, lectura compartida en el hogar).
+
+### `episode_ratings` (Fase 11)
+
+Lectura compartida en el hogar y escritura solo propia, como las reseñas:
+
+| Operación | Política                                                         |
+| --------- | ---------------------------------------------------------------- |
+| SELECT    | `user_id = auth.uid() OR user_id in (miembros de mi hogar)`      |
+| INSERT    | `with check user_id = auth.uid()`                                |
+| UPDATE    | `using user_id = auth.uid()` + `with check user_id = auth.uid()` |
+| DELETE    | `using user_id = auth.uid()`                                     |
+
+El cliente puede leer las notas de la pareja (la UI las muestra junto a cada episodio) sin poder insertar, actualizar ni borrar filas ajenas. Cobertura en `supabase/tests/rls/11_episode_ratings.sql`.
 
 ### `household_watchlist_order` (Fase 9)
 
@@ -278,7 +304,7 @@ La pareja del hogar queda fuera: `user_id = auth.uid()` nunca puede ser cierto c
 
 ### Realtime
 
-Las tres tablas (`user_title_state`, `household_watchlist_order`, `personal_watchlist_order`) están en la publicación `supabase_realtime` para que el cliente invalide la consulta del catálogo cuando el otro miembro cambia algo. El filtrado lo hace RLS: Realtime solo entrega filas que el llamante puede ver, así que la cola personal de la pareja nunca llega al navegador.
+Las tres tablas (`user_title_state`, `household_watchlist_order`, `personal_watchlist_order`) están en la publicación `supabase_realtime` para que el cliente invalide la consulta del catálogo cuando el otro miembro cambia algo. El filtrado lo hace RLS: Realtime solo entrega filas que el llamante puede ver, así que la cola personal de la pareja nunca llega al navegador. `episode_ratings` no se suscribe: sus notas se piden al abrir el detalle de la serie y se refrescan tras cada cambio propio; las de la pareja aparecen en la siguiente carga.
 
 ### Trigger de creación de perfil
 
@@ -399,6 +425,29 @@ Constraints:
 
 - `reviews_title_id_idx` — listar reseñas de un título (y quién las escribió).
 
+#### `episode_ratings` (Fase 11)
+
+| Columna                     | Tipo         | Notas                                         |
+| --------------------------- | ------------ | --------------------------------------------- |
+| `user_id`                   | uuid         | FK → `profiles(id)` `on delete cascade`       |
+| `title_id`                  | uuid         | FK → `titles(id)` `on delete cascade`         |
+| `tmdb_episode_id`           | integer      | id TMDB del episodio (estable entre llamadas) |
+| `season_number`             | integer      |                                               |
+| `episode_number`            | integer      |                                               |
+| `rating`                    | numeric(2,1) | obligatoria; quitar la nota borra la fila     |
+| `created_at` / `updated_at` | timestamptz  | `updated_at` vía `public.set_updated_at()`    |
+
+Constraints:
+
+- `PRIMARY KEY (user_id, title_id, tmdb_episode_id)`
+- `CHECK (rating between 0.5 and 5.0)` y `CHECK ((rating * 10) % 5 = 0)`
+- `CHECK (season_number >= 0)` y `CHECK (episode_number >= 0)`
+
+Índices:
+
+- `episode_ratings_title_idx (title_id, tmdb_episode_id)` — cargar las notas de una serie y cruzarlas con los episodios de TMDB.
+- `episode_ratings_user_idx (user_id)` — RLS y escritura por usuario.
+
 #### `household_watchlist_order` (Fase 9)
 
 | Columna        | Tipo        | Notas                                     |
@@ -504,6 +553,7 @@ limit 1;
 
 - [x] Un título existe una sola vez (unique `tmdb_id`+`media_type`, RPC get-or-create)
 - [x] Calificación individual por usuario y promedio del hogar (UI: pasos de 0.5)
+- [x] Calificación por episodio en series, privada de escritura y visible al hogar (Fase 11)
 - [x] Favoritos por usuario (flag)
 - [x] Pendiente / viendo / visto + "visto por Jhon/Ella/ambos" (derivado en memoria)
 - [x] Dos colas de pendientes: hogar (`shared`) y personal, independientes y con orden propio (D-24)

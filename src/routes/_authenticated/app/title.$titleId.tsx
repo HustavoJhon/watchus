@@ -14,6 +14,7 @@ import {
 } from '@/components/catalog'
 import { RemoveTitleDialog } from '@/components/remove-title-dialog'
 import { ReviewsSection } from '@/components/reviews'
+import { EpisodesSection } from '@/components/episodes'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { useCatalog, useCatalogMutations } from '@/lib/queries'
@@ -147,7 +148,7 @@ function TitleDetailPage() {
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Badge variant="secondary">
-                {mediaTypeLabel(mediaType ?? '')}
+                {mediaTypeLabel(mediaType ?? item.title.media_type)}
               </Badge>
               {item.title.genres.map((genre) => (
                 <Badge key={genre} variant="outline">
@@ -312,6 +313,14 @@ function TitleDetailPage() {
               </div>
             ) : null}
           </div>
+
+          {detail && item.title.media_type === 'tv' ? (
+            <EpisodesSection
+              titleId={localTitleId}
+              tmdbId={item.title.tmdb_id}
+              seasons={detail.seasons}
+            />
+          ) : null}
 
           {detail ? (
             <div>
