@@ -6,6 +6,7 @@ export type TitleRow = Database['public']['Tables']['titles']['Row']
 export type TitleStateRow =
   Database['public']['Tables']['user_title_state']['Row']
 export type WatchStatus = Database['public']['Enums']['watch_status']
+export type WatchScope = Database['public']['Enums']['watch_scope']
 export type WatchlistOrderRow =
   Database['public']['Tables']['household_watchlist_order']['Row']
 
@@ -16,17 +17,29 @@ export interface CatalogItem {
   ownWatchedAt: string | null
   ownRating: number | null
   ownFavorite: boolean
+  /**
+   * Which pending queue this member's row belongs to. Only meaningful while
+   * `ownStatus === 'watchlist'`; null when the member has no row, and left as
+   * the stored value (default 'shared') otherwise.
+   */
+  ownScope: WatchScope | null
   partnerStatus: WatchStatus | null
   partnerWatchedAt: string | null
   partnerRating: number | null
+  /** Same contract as `ownScope`, for the partner. */
+  partnerScope: WatchScope | null
   ownUpdatedAt: string | null
   partnerUpdatedAt: string | null
   /**
-   * Position in the shared household watchlist (1..N), or null when the title
-   * is not part of the order (e.g. never pending). Assigned by the client
-   * after fetching the household order (getWatchlistOrder).
+   * Position in the shared household queue (1..N), or null when the title is
+   * not in it. Assigned by the client after fetching the household order.
    */
-  watchlistPosition: number | null
+  sharedPosition: number | null
+  /**
+   * Position in the viewer's own personal queue (1..N), or null when absent.
+   * Independent from `sharedPosition`: a title can hold a position in both.
+   */
+  personalPosition: number | null
 }
 
 /** Rows of the shared household watchlist order (RLS filters to own household). */
@@ -37,9 +50,18 @@ export function getWatchlistOrder() {
     .order('position', { ascending: true })
 }
 
+/** Rows of the caller's personal watchlist order (RLS filters to own user). */
+export function getPersonalWatchlistOrder() {
+  return supabase
+    .from('personal_watchlist_order')
+    .select('user_id, title_id, position')
+    .order('position', { ascending: true })
+}
+
 interface JoinedStateRow {
   user_id: string
   watch_status: WatchStatus | null
+  watch_scope: WatchScope
   watched_at: string | null
   rating: number | null
   is_favorite: boolean
@@ -50,39 +72,46 @@ interface JoinedStateRow {
 /**
  * Derives "watched by both" in memory: groups the household's state rows by
  * title and splits them between the viewer and their partner.
+ *
+ * Grouping is keyed on `title.id`, not `tmdb_id`: a movie and a series can
+ * share a TMDB id, and keying on it merged two different entries into one and
+ * dropped one of them from the catalog.
  */
 export function buildCatalog(
   rows: JoinedStateRow[],
   userId: string,
 ): CatalogItem[] {
-  const ownByTmdb = new Map<number, JoinedStateRow>()
-  const partnerByTmdb = new Map<number, JoinedStateRow>()
+  const ownByTitle = new Map<string, JoinedStateRow>()
+  const partnerByTitle = new Map<string, JoinedStateRow>()
   for (const row of rows) {
-    const bucket = row.user_id === userId ? ownByTmdb : partnerByTmdb
-    if (!bucket.has(row.title.tmdb_id)) {
-      bucket.set(row.title.tmdb_id, row)
+    const bucket = row.user_id === userId ? ownByTitle : partnerByTitle
+    if (!bucket.has(row.title.id)) {
+      bucket.set(row.title.id, row)
     }
   }
-  const seen = new Set<number>()
+  const seen = new Set<string>()
   const items: CatalogItem[] = []
   for (const row of rows) {
-    const tmdbId = row.title.tmdb_id
-    if (seen.has(tmdbId)) continue
-    seen.add(tmdbId)
-    const own = ownByTmdb.get(tmdbId)
-    const partner = partnerByTmdb.get(tmdbId)
+    const titleId = row.title.id
+    if (seen.has(titleId)) continue
+    seen.add(titleId)
+    const own = ownByTitle.get(titleId)
+    const partner = partnerByTitle.get(titleId)
     items.push({
       title: row.title,
       ownStatus: own?.watch_status ?? null,
       ownWatchedAt: own?.watched_at ?? null,
       ownRating: own?.rating ?? null,
       ownFavorite: own?.is_favorite ?? false,
+      ownScope: own?.watch_scope ?? null,
       partnerStatus: partner?.watch_status ?? null,
       partnerWatchedAt: partner?.watched_at ?? null,
       partnerRating: partner?.rating ?? null,
+      partnerScope: partner?.watch_scope ?? null,
       ownUpdatedAt: own?.updated_at ?? null,
       partnerUpdatedAt: partner?.updated_at ?? null,
-      watchlistPosition: null,
+      sharedPosition: null,
+      personalPosition: null,
     })
   }
   return items
@@ -96,7 +125,7 @@ export function getCatalog() {
   return supabase
     .from('user_title_state')
     .select(
-      'user_id, watch_status, watched_at, rating, is_favorite, updated_at, title:titles(*)',
+      'user_id, watch_status, watch_scope, watched_at, rating, is_favorite, updated_at, title:titles(*)',
     )
     .order('created_at', { referencedTable: 'titles', ascending: false })
 }
@@ -144,6 +173,25 @@ export async function setWatchStatus(
     .from('user_title_state')
     .upsert(
       { user_id: userId, title_id: titleId, watch_status: watchStatus },
+      { onConflict: 'user_id,title_id' },
+    )
+  if (error) throw error
+}
+
+/**
+ * Moves the viewer's pending title between the shared household queue and their
+ * own personal queue. Only meaningful while the status is 'watchlist'; the
+ * server trigger moves the order row and compacts whichever queue it leaves.
+ */
+export async function setWatchScope(
+  userId: string,
+  titleId: string,
+  watchScope: WatchScope,
+) {
+  const { error } = await supabase
+    .from('user_title_state')
+    .upsert(
+      { user_id: userId, title_id: titleId, watch_scope: watchScope },
       { onConflict: 'user_id,title_id' },
     )
   if (error) throw error
@@ -205,11 +253,24 @@ export async function removeTitleFromCatalog(
 
 /**
  * Atomically rewrites the shared household watchlist order. `orderedTitleIds`
- * must be exactly the household's current pending titles (both members see the
- * same list), in the new order 1..N.
+ * must be exactly the titles the household currently has pending as 'shared'
+ * (both members see the same list), in the new order 1..N.
  */
 export async function reorderWatchlist(orderedTitleIds: string[]) {
   const { error } = await supabase.rpc('reorder_household_watchlist', {
+    p_ordered_title_ids: orderedTitleIds,
+  })
+  if (error) throw error
+}
+
+/**
+ * Atomically rewrites the caller's personal watchlist order.
+ * `orderedTitleIds` must be exactly the caller's own pending 'personal' titles,
+ * in the new order 1..N. Nobody else, not even a household partner, can read or
+ * reorder this list.
+ */
+export async function reorderPersonalWatchlist(orderedTitleIds: string[]) {
+  const { error } = await supabase.rpc('reorder_personal_watchlist', {
     p_ordered_title_ids: orderedTitleIds,
   })
   if (error) throw error

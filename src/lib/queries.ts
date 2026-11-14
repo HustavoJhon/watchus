@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { User } from '@supabase/supabase-js'
 import {
@@ -11,16 +12,24 @@ import {
   buildCatalog,
   clearWatchStatus,
   getCatalog,
+  getPersonalWatchlistOrder,
   getWatchlistOrder,
   removeTitleFromCatalog,
+  reorderPersonalWatchlist,
   reorderWatchlist,
   setFavorite,
   setRating,
+  setWatchScope,
   setWatchStatus,
 } from '@/lib/catalog'
-import type { WatchStatus } from '@/lib/catalog'
+import type { WatchScope, WatchStatus } from '@/lib/catalog'
 import type { CatalogItem } from '@/lib/catalog'
-import { applyPendingOrder, attachWatchlistOrder } from '@/lib/catalog-order'
+import {
+  applyOptimisticPositions,
+  applyPendingOrder,
+  attachWatchlistOrder,
+} from '@/lib/catalog-order'
+import { describeReorderError } from '@/lib/reorder-error'
 import type { TitleCandidate } from '@/lib/tmdb/mapper'
 import { searchTitles } from '@/lib/tmdb/search'
 import type { SearchMediaType } from '@/lib/tmdb/search'
@@ -30,6 +39,7 @@ import {
   getReviewsForTitle,
   saveReview,
 } from '@/lib/reviews'
+import type { WatchlistScope } from '@/lib/watchlist'
 
 export const queryKeys = {
   profile: (userId: string) => ['profile', userId] as const,
@@ -144,40 +154,63 @@ export function useCatalog(user?: User | null) {
   })
 }
 
-async function getCatalogRows(userId: string): Promise<{
-  items: CatalogItem[]
-  order: Array<{ title_id: string; position: number }>
-}> {
-  const [catalogQuery, orderQuery] = await Promise.all([
-    getCatalog(),
-    getWatchlistOrder(),
-  ])
-  const { data: rows, error } = catalogQuery
-  if (error) throw error
-  const { data: order, error: orderError } = orderQuery
-  if (orderError) throw orderError
-  return { items: buildCatalog(rows ?? [], userId), order: order ?? [] }
+interface OrderRow {
+  title_id: string
+  position: number
 }
 
-/** Attaches the shared watchlist position and returns the ordered catalog. */
+async function getCatalogRows(userId: string): Promise<{
+  items: CatalogItem[]
+  sharedOrder: OrderRow[]
+  personalOrder: OrderRow[]
+}> {
+  const [catalogQuery, sharedOrderQuery, personalOrderQuery] =
+    await Promise.all([
+      getCatalog(),
+      getWatchlistOrder(),
+      getPersonalWatchlistOrder(),
+    ])
+  const { data: rows, error } = catalogQuery
+  if (error) throw error
+  const { data: sharedOrder, error: sharedOrderError } = sharedOrderQuery
+  if (sharedOrderError) throw sharedOrderError
+  const { data: personalOrder, error: personalOrderError } = personalOrderQuery
+  if (personalOrderError) throw personalOrderError
+  return {
+    items: buildCatalog(rows ?? [], userId),
+    sharedOrder: sharedOrder ?? [],
+    personalOrder: personalOrder ?? [],
+  }
+}
+
+/**
+ * Attaches both queue positions and returns the catalog sorted by the shared
+ * queue first. Each queue keeps its own positions, so attaching one never
+ * disturbs the other.
+ */
 function buildCatalogWithOrder({
   items,
-  order,
+  sharedOrder,
+  personalOrder,
 }: {
   items: CatalogItem[]
-  order: Array<{ title_id: string; position: number }>
+  sharedOrder: OrderRow[]
+  personalOrder: OrderRow[]
 }): CatalogItem[] {
-  return attachWatchlistOrder(items, order)
+  const withShared = attachWatchlistOrder(items, sharedOrder, 'shared')
+  return attachWatchlistOrder(withShared, personalOrder, 'personal')
 }
 
 export function useCatalogMutations(user?: User | null): {
   add: ReturnType<typeof useAddTitleMutation>
   setStatus: ReturnType<typeof useSetStatusMutation>
+  setScope: ReturnType<typeof useSetScopeMutation>
   clearStatus: ReturnType<typeof useClearStatusMutation>
   rate: ReturnType<typeof useRateMutation>
   favorite: ReturnType<typeof useFavoriteMutation>
   remove: ReturnType<typeof useRemoveTitleMutation>
-  reorder: ReturnType<typeof useReorderWatchlistMutation>
+  reorderShared: ReturnType<typeof useReorderWatchlistMutation>
+  reorderPersonal: ReturnType<typeof useReorderPersonalMutation>
 } {
   const queryClient = useQueryClient()
   const userId = user?.id
@@ -187,11 +220,13 @@ export function useCatalogMutations(user?: User | null): {
   return {
     add: useAddTitleMutation(userId, invalidate),
     setStatus: useSetStatusMutation(userId, invalidate),
+    setScope: useSetScopeMutation(userId, invalidate),
     clearStatus: useClearStatusMutation(userId, invalidate),
     rate: useRateMutation(userId, invalidate),
     favorite: useFavoriteMutation(userId, invalidate),
     remove: useRemoveTitleMutation(userId, invalidate),
-    reorder: useReorderWatchlistMutation(userId, queryClient),
+    reorderShared: useReorderWatchlistMutation(userId, queryClient),
+    reorderPersonal: useReorderPersonalMutation(userId, queryClient),
   }
 }
 
@@ -222,6 +257,25 @@ function useSetStatusMutation(
     }) => {
       if (!userId) throw new Error('Sesión no iniciada.')
       return setWatchStatus(userId, titleId, status)
+    },
+    onSuccess,
+  })
+}
+
+function useSetScopeMutation(
+  userId: string | undefined,
+  onSuccess: () => void,
+) {
+  return useMutation({
+    mutationFn: ({
+      titleId,
+      scope,
+    }: {
+      titleId: string
+      scope: WatchScope
+    }) => {
+      if (!userId) throw new Error('Sesión no iniciada.')
+      return setWatchScope(userId, titleId, scope)
     },
     onSuccess,
   })
@@ -399,41 +453,70 @@ function useDeleteReviewMutation(
 }
 
 /**
- * Reorders the shared household watchlist. Optimistic update with rollback on
- * error; the invalidation refreshes any other view (e.g. the partner) without
- * a full reload.
+ * Reorders one of the pending queues. Optimistic update with rollback on error:
+ * the visible array and the position numbers both move immediately, and both go
+ * back if the server rejects the list.
  */
-function useReorderWatchlistMutation(
+function useReorderQueueMutation(
   userId: string | undefined,
   queryClient: ReturnType<typeof useQueryClient>,
+  scope: WatchlistScope,
 ) {
-  return useMutation({
+  const [error, setError] = useState<string | null>(null)
+  const persist =
+    scope === 'shared' ? reorderWatchlist : reorderPersonalWatchlist
+
+  const mutation = useMutation({
     mutationFn: (orderedTitleIds: string[]) => {
       if (!userId) throw new Error('Sesión no iniciada.')
-      return reorderWatchlist(orderedTitleIds)
+      return persist(orderedTitleIds)
     },
     onMutate: async (orderedTitleIds) => {
       const queryKey = queryKeys.catalog(userId ?? '')
       await queryClient.cancelQueries({ queryKey })
       const previous = queryClient.getQueryData<CatalogItem[]>(queryKey)
       if (previous) {
+        // Rewrite both the array order and the queue positions, so the number
+        // shown on each card matches what was just submitted.
         queryClient.setQueryData(
           queryKey,
-          applyPendingOrder(previous, orderedTitleIds),
+          applyOptimisticPositions(
+            applyPendingOrder(previous, orderedTitleIds),
+            orderedTitleIds,
+            scope,
+          ),
         )
       }
       return { previous }
     },
-    onError: (_err, _ordered, context) => {
+    onError: (err, _ordered, context) => {
       if (context?.previous) {
         queryClient.setQueryData(
           queryKeys.catalog(userId ?? ''),
           context.previous,
         )
       }
+      setError(describeReorderError(err))
     },
+    onSuccess: () => setError(null),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['catalog'] })
     },
   })
+
+  return { ...mutation, errorMessage: error, clearError: () => setError(null) }
+}
+
+function useReorderWatchlistMutation(
+  userId: string | undefined,
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  return useReorderQueueMutation(userId, queryClient, 'shared')
+}
+
+function useReorderPersonalMutation(
+  userId: string | undefined,
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  return useReorderQueueMutation(userId, queryClient, 'personal')
 }

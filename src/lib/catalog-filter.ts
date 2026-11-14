@@ -1,5 +1,6 @@
-import type { CatalogItem } from '@/lib/catalog'
-import type { WatchStatus } from '@/lib/catalog'
+import type { CatalogItem, WatchStatus } from '@/lib/catalog'
+import { isPendingInScope } from '@/lib/watchlist'
+import type { WatchlistScope } from '@/lib/watchlist'
 
 /** Media-type filter. */
 export type MediaTypeFilter = 'all' | 'movie' | 'tv'
@@ -13,10 +14,17 @@ export type StatusFilter = 'all' | 'none' | WatchStatus
 /** Favorite filter. */
 export type FavoriteFilter = 'all' | 'favorites'
 
+/**
+ * Which pending queue to show: `all` (both), the household queue or the
+ * viewer's personal one. Only meaningful together with status === 'watchlist'.
+ */
+export type ScopeFilter = 'all' | WatchlistScope
+
 export interface CatalogFilters {
   type: MediaTypeFilter
   status: StatusFilter
   favorites: FavoriteFilter
+  scope: ScopeFilter
   /** Local in-catalog search by title name (no TMDB call). */
   query: string
 }
@@ -25,7 +33,13 @@ export const DEFAULT_FILTERS: CatalogFilters = {
   type: 'all',
   status: 'all',
   favorites: 'all',
+  scope: 'all',
   query: '',
+}
+
+/** The scope filter only narrows pending titles, so it is inert otherwise. */
+export function scopeFilterApplies(filters: CatalogFilters): boolean {
+  return filters.status === 'watchlist' && filters.scope !== 'all'
 }
 
 export function hasActiveFilters(filters: CatalogFilters): boolean {
@@ -33,6 +47,7 @@ export function hasActiveFilters(filters: CatalogFilters): boolean {
     filters.type !== 'all' ||
     filters.status !== 'all' ||
     filters.favorites !== 'all' ||
+    scopeFilterApplies(filters) ||
     filters.query.trim() !== ''
   )
 }
@@ -50,7 +65,12 @@ export function matchesCatalogFilters(
   if (filters.type !== 'all' && item.title.media_type !== filters.type) {
     return false
   }
-  if (filters.status !== 'all') {
+  if (filters.status === 'watchlist' && filters.scope !== 'all') {
+    // When a queue is selected it owns the meaning of «Pendientes»: the
+    // household queue also holds whatever the partner has pending as shared,
+    // which the plain own-status check below would hide.
+    if (!isPendingInScope(item, filters.scope)) return false
+  } else if (filters.status !== 'all') {
     if (filters.status === 'none') {
       if (item.ownStatus !== null) return false
     } else if (item.ownStatus !== filters.status) {
@@ -125,6 +145,10 @@ export function countLabelOf(
               ? 'pendiente'
               : 'pendientes'
     parts.push(statusWord)
+  }
+
+  if (filters.status === 'watchlist' && filters.scope !== 'all') {
+    parts.push(filters.scope === 'shared' ? 'del hogar' : 'solo para mí')
   }
 
   return `${count} ${parts.join(' ')}`

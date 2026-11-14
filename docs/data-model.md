@@ -67,12 +67,48 @@ Enum `watch_status`:
 
 **Cómo se derivan los conceptos del producto:**
 
-| Concepto             | Derivación                                                                  |
-| -------------------- | --------------------------------------------------------------------------- |
-| "Pendiente para mí"  | `watch_status = 'watchlist'` en mi fila                                     |
-| "Visto por Jhon"     | fila de Jhon con `watch_status = 'watched'`                                 |
-| "Visto por ambos"    | las filas de ambos usuarios (mismo hogar) tienen `watch_status = 'watched'` |
-| "Visto por uno solo" | exactamente una de las filas del hogar es `'watched'`                       |
+| Concepto                 | Derivación                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| "Pendiente del hogar"    | mi fila o la de mi pareja con `watch_status = 'watchlist'` y `watch_scope = 'shared'` |
+| "Pendiente solo para mí" | mi fila con `watch_status = 'watchlist'` y `watch_scope = 'personal'`                 |
+| "Pendiente para mí"      | `watch_status = 'watchlist'` en mi fila, cualquiera de los dos ámbitos                |
+| "Visto por Jhon"         | fila de Jhon con `watch_status = 'watched'`                                           |
+| "Visto por ambos"        | las filas de ambos usuarios (mismo hogar) tienen `watch_status = 'watched'`           |
+| "Visto por uno solo"     | exactamente una de las filas del hogar es `'watched'`                                 |
+
+### Ámbitos de pendiente (D-24)
+
+`watch_scope` (`shared` por defecto, `personal`) decide **en qué cola** vive un título pendiente. Vive en `user_title_state` porque el ámbito pertenece a la relación usuario-título, no al título: los dos miembros pueden tener el mismo título pendiente en colas distintas.
+
+| Ámbito     | Cola                        | Orden en       | Quién la ve   |
+| ---------- | --------------------------- | -------------- | ------------- |
+| `shared`   | `household_watchlist_order` | la tabla       | el hogar      |
+| `personal` | `personal_watchlist_order`  | la del usuario | solo su dueño |
+
+Son colas **independientes**: un título puede tener posición en las dos a la vez (la pareja lo marcó `shared` y yo `personal`). Por eso cada fila de orden tiene su propia numeración 1..N y mover un título de una cola a otra lo añade al final de la destino y compacta la de origen.
+
+#### La privacidad del ámbito personal (`20260913120000`)
+
+`user_title_state` es legible por el hogar entero: el catálogo necesita los estados del otro miembro para derivar «visto por ambos» y las notas. Pero al vivir ahí `watch_scope`, esa lectura previa pasó a revelar la pertenencia a la cola privada:
+
+```sql
+-- antes: la pareja veía todo
+using (user_id = auth.uid() or user_id in (select private.my_watch_partners()))
+```
+
+Consecuencia medida con dos cuentas reales del mismo hogar: `GET /rest/v1/user_title_state?user_id=eq.<pareja>` devolvía los tres títulos de su lista «solo para mí», y Realtime (que aplica la misma comprobación) avisaba en cuanto la pareja añadía algo. La política actual solo deja fuera lo que es información de la cola privada:
+
+```sql
+using (
+  user_id = (select auth.uid())
+  or (user_id in (select private.my_watch_partners())
+      and (watch_status is distinct from 'watchlist' or watch_scope <> 'personal'))
+)
+```
+
+Es decir: los **pendientes en `personal`** son invisibles para la pareja; los pendientes compartidos y los estados ya no pendientes (`watching`/`watched`, con el ámbito que sea) siguen viéndose, porque no pertenecen a ninguna cola —solo hay fila de orden mientras la fila está pendiente— y hacen falta para las derivaciones del catálogo. Cobertura en `supabase/tests/rls/10_personal_scope_privacy.sql`.
+
+`personal_watchlist_order` mantiene además sus cuatro políticas `user_id = auth.uid()`, y el cliente **no** se suscribe a ella por Realtime: la plataforma no aplica RLS a los eventos `DELETE`, de modo que una suscripción revelaría a la pareja el `title_id` de cada título que sale de la lista privada. Ver `docs/production.md` §6.
 
 "Visto por ambos" **no se almacena** (no hay columna `watched_by_both`): se deriva en memoria en el cliente con `buildCatalog` (`src/lib/catalog.ts`) agrupando las filas de `user_title_state` visibles para el hogar. Ver tests `CT14`.
 
@@ -216,6 +252,8 @@ Igual que `user_title_state` (por usuario, lectura compartida en el hogar).
 
 ### `household_watchlist_order` (Fase 9)
 
+Cola compartida, ámbito `shared`. RLS por hogar:
+
 | Operación | Política                                                              |
 | --------- | --------------------------------------------------------------------- |
 | SELECT    | `household_id = private.my_household_id()`                            |
@@ -223,7 +261,24 @@ Igual que `user_title_state` (por usuario, lectura compartida en el hogar).
 | UPDATE    | `using household_id = private.my_household_id()` (mismo `with check`) |
 | DELETE    | `using household_id = private.my_household_id()`                      |
 
-Los `SELECT`/`INSERT/UPDATE/DELETE` directos existen para que tests (y clientes) lean la cola y para que el trigger de entrada/salida de pendientes la mantenga, pero el **reordenamiento** siempre pasa por la RPC `reorder_household_watchlist`. `auth.uid()` ejecuta `private.my_household_id()`; el `set search_path = ''` en las funciones evita colisiones con `public`.
+Los `SELECT`/`INSERT/UPDATE/DELETE` directos existen para que tests (y clientes) lean la cola y para que el trigger de entrada/salida de pendientes la mantenga, pero el **reordenamiento** siempre pasa por la RPC `reorder_household_watchlist`. `auth.uid()` ejecuta `private.my_household_id()`; el `set search_path = ''` en las funciones evita colisiones con `public`. La tabla contiene solo pendientes `shared` (ver D-23).
+
+### `personal_watchlist_order` (Fase 9)
+
+Cola privada, ámbito `personal`. RLS estricta por usuario:
+
+| Operación | Política                                          |
+| --------- | ------------------------------------------------- |
+| SELECT    | `user_id = auth.uid()`                            |
+| INSERT    | `with check user_id = auth.uid()`                 |
+| UPDATE    | `using user_id = auth.uid()` (mismo `with check`) |
+| DELETE    | `using user_id = auth.uid()`                      |
+
+La pareja del hogar queda fuera: `user_id = auth.uid()` nunca puede ser cierto con el id de otro miembro, así que la cola es opaca para ella. El reordenamiento pasa por `reorder_personal_watchlist(uuid[])`.
+
+### Realtime
+
+Las tres tablas (`user_title_state`, `household_watchlist_order`, `personal_watchlist_order`) están en la publicación `supabase_realtime` para que el cliente invalide la consulta del catálogo cuando el otro miembro cambia algo. El filtrado lo hace RLS: Realtime solo entrega filas que el llamante puede ver, así que la cola personal de la pareja nunca llega al navegador.
 
 ### Trigger de creación de perfil
 
@@ -249,6 +304,7 @@ $$;
 
 - `media_type`: `movie`, `tv`
 - `watch_status`: `watchlist`, `watching`, `watched`
+- `watch_scope`: `shared`, `personal`
 
 ### Tabla por tabla
 
@@ -301,15 +357,16 @@ Constraints:
 
 #### `user_title_state`
 
-| Columna                     | Tipo                           | Notas                                   |
-| --------------------------- | ------------------------------ | --------------------------------------- |
-| `user_id`                   | uuid                           | FK → `profiles(id)` `on delete cascade` |
-| `title_id`                  | uuid                           | FK → `titles(id)` `on delete cascade`   |
-| `watch_status`              | watch_status null              |                                         |
-| `watched_at`                | date null                      |                                         |
-| `is_favorite`               | boolean not null default false |                                         |
-| `rating`                    | numeric(2,1) null              |                                         |
-| `created_at` / `updated_at` | timestamptz                    |                                         |
+| Columna                     | Tipo                                  | Notas                                   |
+| --------------------------- | ------------------------------------- | --------------------------------------- |
+| `user_id`                   | uuid                                  | FK → `profiles(id)` `on delete cascade` |
+| `title_id`                  | uuid                                  | FK → `titles(id)` `on delete cascade`   |
+| `watch_status`              | watch_status null                     |                                         |
+| `watch_scope`               | watch_scope not null default 'shared' | en qué cola vive si es pendiente        |
+| `watched_at`                | date null                             |                                         |
+| `is_favorite`               | boolean not null default false        |                                         |
+| `rating`                    | numeric(2,1) null                     |                                         |
+| `created_at` / `updated_at` | timestamptz                           |                                         |
 
 Constraints:
 
@@ -360,14 +417,48 @@ Constraints:
 
 Triggers:
 
-- `public.ensure_watchlist_order_entry()` — `security definer` (`set search_path = ''`), disparado con `execute procedure` desde `user_title_state` (AFTER INSERT OR UPDATE OF `watch_status`). Cuando un miembro pasa un título a `watchlist`, asigna `max(position)+1` (con `pg_advisory_xact_lock` por hogar) e inserta la fila de orden con `on conflict (household_id, title_id) do nothing`: si la fila ya existía (el título vuelve a pendientes), **conserva** su posición. Al salir de `watchlist` el trigger no borra nada.
-- `reorder_household_watchlist(uuid[])` — RPC `security definer` que reescribe posiciones en una transacción y compacta filas conservadas. Ver D-20.
+- `public.sync_watchlist_order_entry()` — `security definer` (`set search_path = ''`), disparado desde `user_title_state` (AFTER INSERT OR DELETE, y AFTER UPDATE OF `watch_status, watch_scope`). Mantiene la fila de orden sincronizada con el conjunto de pendientes `shared` del hogar. Ver "Colas solo-pendientes" más abajo.
+- `reorder_household_watchlist(uuid[])` — RPC `security definer` que reescribe posiciones en una transacción. Ver D-20 y D-23.
 
 Índices:
 
 - PK cubre `(household_id, title_id)` → RLS filtra por `household_id` (leading column).
 - `household_watchlist_order_title_id_idx` — localizar la fila de orden de un título.
 - La unicidad de posición la da la constraint `household_watchlist_order_position_unique` `(household_id, position)`.
+
+#### `personal_watchlist_order`
+
+La cola privada del usuario, gemela de la anterior pero con un solo lector posible.
+
+| Columna      | Tipo        | Notas                                   |
+| ------------ | ----------- | --------------------------------------- |
+| `user_id`    | uuid        | FK → `profiles(id)` `on delete cascade` |
+| `title_id`   | uuid        | FK → `titles(id)` `on delete cascade`   |
+| `position`   | integer     | 1..N, solo de este usuario              |
+| `created_at` | timestamptz | `default now()`                         |
+| `updated_at` | timestamptz | `default now()`                         |
+
+Constraints: `PRIMARY KEY (user_id, title_id)`, `UNIQUE (user_id, position)`, `CHECK (position > 0)`.
+
+RLS: las cuatro operaciones exigen `user_id = auth.uid()`. Una pareja del mismo hogar **no** puede leer, escribir ni ordenar esta cola, ni aunque conozca los ids.
+
+Triggers:
+
+- El mismo `public.sync_watchlist_order_entry()` la mantiene sincronizada con los pendientes `personal` del usuario.
+- `reorder_personal_watchlist(uuid[])` — RPC `security definer` que valida contra el conjunto de pendientes `personal` del propio `auth.uid()` y usa `private.renumber_personal_watchlist()` con un `pg_advisory_xact_lock` por usuario, de forma análoga a la cola compartida.
+
+### Colas solo-pendientes (D-23)
+
+Las dos tablas de orden contienen **exactamente** los títulos pendientes de su ámbito, ni uno más:
+
+- Al entrar en `pending` (`watch_status = 'watchlist'`) se inserta la fila al final (`max(position)+1`).
+- Al salir de `pending` **se borra** la fila y se compactan las posiciones siguientes.
+- Al volver a `pending` se reinserta al final. No se recuerda dónde estaba.
+- Cambiar `watch_scope` mueve la fila entre las dos colas: se borra de la de origen (compactando) y se añade al final de la de destino.
+
+El efecto secundario que lo justifica: `max(position)+1` es correcto aunque dos miembros añadan títulos a la vez, y `UNIQUE (position)` nunca choca porque el renumerado se hace con un "parking" de posiciones positivas en una transacción con lock.
+
+El trigger también se dispara cuando cambia la composición del hogar, de modo que la cola compartida se recalcula para los dos miembros a la vez.
 
 ## Consultas de referencia
 
@@ -415,6 +506,7 @@ limit 1;
 - [x] Calificación individual por usuario y promedio del hogar (UI: pasos de 0.5)
 - [x] Favoritos por usuario (flag)
 - [x] Pendiente / viendo / visto + "visto por Jhon/Ella/ambos" (derivado en memoria)
+- [x] Dos colas de pendientes: hogar (`shared`) y personal, independientes y con orden propio (D-24)
 - [x] `watched_at` consistente por trigger en BD
 - [x] Reseña única por usuario-título, editable (tabla lista; UI diferida)
 - [x] Géneros sin normalización innecesaria (`text[]`, nombres resueltos)

@@ -69,6 +69,45 @@ export type Database = {
         }
         Relationships: []
       }
+      personal_watchlist_order: {
+        Row: {
+          created_at: string
+          position: number
+          title_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          position: number
+          title_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          position?: number
+          title_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'personal_watchlist_order_title_id_fkey'
+            columns: ['title_id']
+            isOneToOne: false
+            referencedRelation: 'titles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'personal_watchlist_order_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -190,6 +229,7 @@ export type Database = {
           title_id: string
           updated_at: string
           user_id: string
+          watch_scope: Database['public']['Enums']['watch_scope']
           watch_status: Database['public']['Enums']['watch_status'] | null
           watched_at: string | null
         }
@@ -200,6 +240,7 @@ export type Database = {
           title_id: string
           updated_at?: string
           user_id: string
+          watch_scope?: Database['public']['Enums']['watch_scope']
           watch_status?: Database['public']['Enums']['watch_status'] | null
           watched_at?: string | null
         }
@@ -210,6 +251,7 @@ export type Database = {
           title_id?: string
           updated_at?: string
           user_id?: string
+          watch_scope?: Database['public']['Enums']['watch_scope']
           watch_status?: Database['public']['Enums']['watch_status'] | null
           watched_at?: string | null
         }
@@ -318,9 +360,14 @@ export type Database = {
         Args: { p_ordered_title_ids: string[] }
         Returns: undefined
       }
+      reorder_personal_watchlist: {
+        Args: { p_ordered_title_ids: string[] }
+        Returns: undefined
+      }
     }
     Enums: {
       media_type: 'movie' | 'tv'
+      watch_scope: 'shared' | 'personal'
       watch_status: 'watchlist' | 'watching' | 'watched'
     }
     CompositeTypes: {
@@ -447,6 +494,7 @@ export const Constants = {
   public: {
     Enums: {
       media_type: ['movie', 'tv'],
+      watch_scope: ['shared', 'personal'],
       watch_status: ['watchlist', 'watching', 'watched'],
     },
   },

@@ -22,7 +22,15 @@ import {
   type CatalogFilters,
 } from '@/lib/catalog-filter'
 import { reorderWithSubset } from '@/lib/catalog-order'
-import { householdWatchlist } from '@/lib/watchlist'
+import {
+  isPendingInScope,
+  watchlistCountLabel,
+  watchlistScopeLabel,
+  watchlistSections,
+} from '@/lib/watchlist'
+import type { WatchlistScope } from '@/lib/watchlist'
+import { describeReorderError } from '@/lib/reorder-error'
+import { useCatalogRealtime } from '@/lib/use-catalog-realtime'
 import { toast } from '@/lib/toast'
 
 export const Route = createFileRoute('/_authenticated/app/catalog')({
@@ -36,6 +44,10 @@ export const Route = createFileRoute('/_authenticated/app/catalog')({
         ? search.status
         : 'all',
     favorites: search.favorites === 'favorites' ? 'favorites' : 'all',
+    scope:
+      search.scope === 'shared' || search.scope === 'personal'
+        ? search.scope
+        : 'all',
     query: typeof search.query === 'string' ? search.query : '',
   }),
   component: CatalogPage,
@@ -45,6 +57,7 @@ function CatalogPage() {
   const auth = useAuth()
   const navigate = useNavigate()
   const catalogQuery = useCatalog(auth.user)
+  useCatalogRealtime(auth.user)
   const mutations = useCatalogMutations(auth.user)
   const { household, secondMember } = useHouseholdContext(auth.user)
   const searchParams = Route.useSearch()
@@ -56,8 +69,7 @@ function CatalogPage() {
   const items = catalogQuery.data ?? []
   const filtered = filterCatalog(items, filters)
   const hasFilters = hasActiveFilters(filters)
-  const fullPending = householdWatchlist(items)
-  const fullPendingIds = fullPending.map((item) => item.title.id)
+  const sections = watchlistSections(items)
 
   const [prevQuery, setPrevQuery] = useState(searchParams.query)
   const [input, setInput] = useState(searchParams.query)
@@ -78,6 +90,7 @@ function CatalogPage() {
           type: filters.type,
           status: filters.status,
           favorites: filters.favorites,
+          scope: filters.scope,
           query: input.trim(),
         },
       })
@@ -86,7 +99,14 @@ function CatalogPage() {
     return () => {
       clearTimeout(timeout)
     }
-  }, [input, navigate, filters.type, filters.status, filters.favorites])
+  }, [
+    input,
+    navigate,
+    filters.type,
+    filters.status,
+    filters.favorites,
+    filters.scope,
+  ])
 
   function setFilters(next: Partial<CatalogFilters>) {
     void navigate({
@@ -99,16 +119,40 @@ function CatalogPage() {
     void navigate({ to: '/app/catalog', search: DEFAULT_FILTERS })
   }
 
-  function reorder(from: number, to: number) {
+  const isWatchlist = filters.status === 'watchlist'
+
+  /**
+   * The two queues are separate, so reordering only ever submits the queue
+   * being displayed. With both shown at once each section reorders its own.
+   */
+  function reorderQueue(scope: WatchlistScope, from: number, to: number) {
+    const queue = scope === 'shared' ? sections.shared : sections.personal
     const orderedIds = reorderWithSubset(
-      fullPendingIds,
-      filtered.map((item) => item.title.id),
+      queue.map((item) => item.title.id),
+      visibleIdsInScope(scope),
       from,
       to,
     )
-    mutations.reorder.mutate(orderedIds, {
+    const mutation =
+      scope === 'shared' ? mutations.reorderShared : mutations.reorderPersonal
+    mutation.mutate(orderedIds, {
       onSuccess: () => toast({ title: 'Orden actualizado' }),
+      onError: (error) =>
+        toast({
+          title:
+            scope === 'shared'
+              ? 'No se pudo ordenar la lista del hogar'
+              : 'No se pudo ordenar tu lista personal',
+          description: describeReorderError(error),
+        }),
     })
+  }
+
+  /** Titles of one queue that survive the active filters, in display order. */
+  function visibleIdsInScope(scope: WatchlistScope): string[] {
+    return filtered
+      .filter((item) => isPendingInScope(item, scope))
+      .map((item) => item.title.id)
   }
 
   const emptyDescription = [] as string[]
@@ -125,8 +169,6 @@ function CatalogPage() {
   if (filters.favorites === 'favorites') {
     emptyDescription.push(filters.type === 'all' ? 'favoritos' : 'favoritas')
   }
-
-  const isWatchlist = filters.status === 'watchlist'
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -247,19 +289,55 @@ function CatalogPage() {
 
       {filtered.length > 0 && isWatchlist ? (
         <p className="text-xs text-muted-foreground">
-          Arrastra (o usa las flechas) para ordenar la cola compartida.
+          Arrastra (o usa las flechas) para ordenar cada lista.
         </p>
       ) : null}
 
       {filtered.length > 0 ? (
-        isWatchlist ? (
-          <ReorderBoard items={filtered} onMove={reorder} />
-        ) : (
+        !isWatchlist ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {filtered.map((item) => (
               <TitleCard key={item.title.id} item={item} />
             ))}
           </div>
+        ) : filters.scope === 'all' ? (
+          // Both queues at once: each section is reordered on its own, because
+          // they are separate lists with independent positions.
+          <div className="flex flex-col gap-6">
+            {(['shared', 'personal'] as const).map((scope) => {
+              const visible = filtered.filter((item) =>
+                isPendingInScope(item, scope),
+              )
+              if (visible.length === 0) return null
+              return (
+                <section key={scope} className="flex flex-col gap-2">
+                  <h2 className="text-sm font-medium">
+                    {watchlistScopeLabel(scope)}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {watchlistCountLabel(visible.length)}
+                    </span>
+                  </h2>
+                  <ReorderBoard
+                    items={visible}
+                    scope={scope}
+                    onMove={(from, to) => reorderQueue(scope, from, to)}
+                  />
+                </section>
+              )
+            })}
+          </div>
+        ) : filters.scope === 'shared' ? (
+          <ReorderBoard
+            items={filtered}
+            scope="shared"
+            onMove={(from, to) => reorderQueue('shared', from, to)}
+          />
+        ) : (
+          <ReorderBoard
+            items={filtered}
+            scope="personal"
+            onMove={(from, to) => reorderQueue('personal', from, to)}
+          />
         )
       ) : null}
     </div>

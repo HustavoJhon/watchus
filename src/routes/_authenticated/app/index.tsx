@@ -11,7 +11,7 @@ import { useAllReviews, useCatalog, useHouseholdContext } from '@/lib/queries'
 import type { CatalogItem } from '@/lib/catalog'
 import type { ReviewRow } from '@/lib/reviews'
 import { formatRelativeTime } from '@/lib/format'
-import { householdWatchlist } from '@/lib/watchlist'
+import { watchlistSections } from '@/lib/watchlist'
 
 export const Route = createFileRoute('/_authenticated/app/')({
   component: DashboardPage,
@@ -72,6 +72,7 @@ const watchlistUrl = {
     type: 'all' as const,
     status: 'watchlist' as const,
     favorites: 'all' as const,
+    scope: 'all' as const,
     query: '',
   },
 }
@@ -85,7 +86,10 @@ function DashboardPage() {
   )
 
   const items = catalogQuery.data ?? []
-  const pending = householdWatchlist(items)
+  // Both queues: what the household has pending plus what only the viewer has
+  // pending. They are separate lists, but the dashboard shows them together.
+  const sections = watchlistSections(items)
+  const pending = [...sections.shared, ...sections.personal]
 
   const me = members.find((member) => member.id === auth.user?.id)
   const partner = members.find((member) => member.id !== auth.user?.id)

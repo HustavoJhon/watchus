@@ -29,14 +29,38 @@ export function makeItem(overrides: Partial<CatalogItem> = {}): CatalogItem {
     ownWatchedAt: null,
     ownRating: null,
     ownFavorite: false,
+    ownScope: null,
     partnerStatus: null,
     partnerWatchedAt: null,
     partnerRating: null,
+    partnerScope: null,
     ownUpdatedAt: null,
     partnerUpdatedAt: null,
-    watchlistPosition: null,
+    sharedPosition: null,
+    personalPosition: null,
   }
   return { ...base, ...overrides }
+}
+
+/**
+ * A title pending in the viewer's shared queue (the default when someone adds
+ * something to the catalog).
+ */
+export function makeSharedPending(
+  overrides: Partial<CatalogItem> = {},
+): CatalogItem {
+  return makeItem({ ownStatus: 'watchlist', ownScope: 'shared', ...overrides })
+}
+
+/** A title pending only in the viewer's personal queue. */
+export function makePersonalPending(
+  overrides: Partial<CatalogItem> = {},
+): CatalogItem {
+  return makeItem({
+    ownStatus: 'watchlist',
+    ownScope: 'personal',
+    ...overrides,
+  })
 }
 
 export function makeReview(
